@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+:root {
+  --background: #000000;
+  --foreground: #e7e5e4;
+  --accent: #f97316;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-pixel: var(--font-pixel);
+  --font-term: var(--font-term);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-term), monospace;
+  font-size: 19px;
+  image-rendering: pixelated;
+}
+
+/* CRT scanlines over everything */
+.crt::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.22) 0px,
+    rgba(0, 0, 0, 0.22) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* Bayer-ish dither texture (used on cards / header) */
+.dither {
+  background-image: repeating-conic-gradient(
+    rgba(249, 115, 22, 0.05) 0% 25%,
+    transparent 0% 50%
+  );
+  background-size: 4px 4px;
+}
+
+/* Chunky pixel panel: square corners + hard offset shadow */
+.pixel-panel {
+  border: 2px solid #44403c;
+  box-shadow: 4px 4px 0 0 rgba(249, 115, 22, 0.12);
+  background: #0a0806;
+}
+
+.pixel-panel-accent {
+  border-color: var(--accent);
+  box-shadow: 4px 4px 0 0 rgba(249, 115, 22, 0.35);
+}
+
+/* Pixel button press effect */
+.pixel-btn {
+  border: 2px solid var(--accent);
+  box-shadow: 3px 3px 0 0 #7c2d12;
+  transition: none;
+}
+.pixel-btn:active:not(:disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 0 #7c2d12;
+}
+.pixel-btn:disabled {
+  border-color: #44403c;
+  box-shadow: 3px 3px 0 0 #1c1917;
+}
+
+/* Orange neon glow */
+.glow-text {
+  text-shadow:
+    0 0 6px rgba(249, 115, 22, 0.9),
+    0 0 18px rgba(249, 115, 22, 0.5),
+    0 0 32px rgba(249, 115, 22, 0.25);
+}
+
+.glow-border {
+  box-shadow:
+    4px 4px 0 0 #000,
+    0 0 14px rgba(249, 115, 22, 0.35),
+    inset 0 0 10px rgba(249, 115, 22, 0.07);
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    text-shadow:
+      0 0 6px rgba(249, 115, 22, 0.9),
+      0 0 18px rgba(249, 115, 22, 0.5);
+  }
+  50% {
+    text-shadow:
+      0 0 10px rgba(249, 115, 22, 1),
+      0 0 28px rgba(249, 115, 22, 0.8),
+      0 0 48px rgba(249, 115, 22, 0.4);
+  }
+}
+.glow-pulse {
+  animation: glowPulse 2.4s ease-in-out infinite;
+}
+
+/* 8-bit bidder bounce (step keyframes = chunky retro motion) */
+@keyframes bidderBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.bidder-bounce {
+  animation: bidderBounce 0.6s steps(2, end) infinite;
+}
+
+@keyframes bidPop {
+  0% { transform: translateY(4px); opacity: 0; }
+  15% { transform: translateY(0); opacity: 1; }
+  80% { transform: translateY(-2px); opacity: 1; }
+  100% { transform: translateY(-8px); opacity: 0; }
+}
+.bid-pop {
+  animation: bidPop 1.6s steps(4, end) infinite;
+}
+
+@keyframes gavelSlam {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  70% { transform: rotate(-35deg); }
+  80% { transform: rotate(10deg); }
+}
+.gavel-slam {
+  transform-origin: bottom right;
+  animation: gavelSlam 3.2s steps(3, end) infinite;
+}
+
+/* Blinking cursor */
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* Chunky retro scrollbars */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: #000;
+  border-left: 2px solid #292524;
+}
+::-webkit-scrollbar-thumb {
+  background: #57534e;
+  border: 2px solid #000;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}

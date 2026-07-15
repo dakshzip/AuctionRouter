@@ -1,0 +1,12 @@
+**/.git
+**/node_modules
+**/.next
+**/out
+**/__pycache__
+**/.venv
+**/.env
+**/.env.*
+!**/.env.example
+**/.DS_Store
+AuctionRouter_PRD.md
+docs/
