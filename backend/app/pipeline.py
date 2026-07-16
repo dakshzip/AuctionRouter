@@ -275,27 +275,32 @@ async def verify(state: RouterState) -> RouterState:
     return out
 
 
-def _frontier_effort(state: RouterState) -> str:
-    """Pick GPT-5's reasoning effort from the bidders' difficulty estimates.
+def _frontier_plan(state: RouterState) -> tuple[str, int]:
+    """Pick GPT-5's (reasoning effort, max_tokens) from the bidders'
+    difficulty estimates.
 
     Escalations of easy queries (a failed verification on something every
-    bidder rated simple) don't deserve a minute of chain-of-thought.
+    bidder rated simple) don't deserve a minute of chain-of-thought or a
+    frontier-sized token budget; hard queries get both.
     """
+    hard = (settings.frontier_reasoning_effort, settings.max_frontier_tokens)
     difficulties = [b.estimated_difficulty for b in state.get("bids", [])
                     if b.error is None]
     if not difficulties:
-        return settings.frontier_reasoning_effort
+        return hard
     mean_difficulty = sum(difficulties) / len(difficulties)
     if mean_difficulty >= settings.frontier_difficulty_threshold:
-        return settings.frontier_reasoning_effort
-    return settings.frontier_easy_reasoning_effort
+        return hard
+    return (settings.frontier_easy_reasoning_effort,
+            settings.max_frontier_tokens_easy)
 
 
 async def escalate(state: RouterState) -> RouterState:
+    effort, max_tokens = _frontier_plan(state)
     try:
         resp = await chat(TIER2_MODEL, prompts.FRONTIER_SYSTEM, state["query"],
-                          max_tokens=settings.max_frontier_tokens,
-                          reasoning_effort=_frontier_effort(state),
+                          max_tokens=max_tokens,
+                          reasoning_effort=effort,
                           history=state.get("history"))
         if not resp.content.strip():
             raise LLMError(f"{TIER2_MODEL.openrouter_id}: empty response "
@@ -519,7 +524,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
                    "model": spec.display_name}
 
     if state.get("escalated"):
-        effort = _frontier_effort(state)
+        effort, max_tokens = _frontier_plan(state)
         yield {"type": "stage", "stage": "escalating",
                "model": TIER2_MODEL.display_name,
                "reason": state.get("escalation_reason"),
@@ -527,7 +532,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
         try:
             resp = None
             async for ev in chat_stream(TIER2_MODEL, prompts.FRONTIER_SYSTEM, query,
-                                        max_tokens=settings.max_frontier_tokens,
+                                        max_tokens=max_tokens,
                                         reasoning_effort=effort,
                                         history=state["history"]):
                 if ev["type"] == "delta":

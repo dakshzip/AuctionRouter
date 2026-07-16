@@ -157,6 +157,10 @@ class Settings(BaseSettings):
     # effort thinks longer than low), so don't cut this too far or the
     # answer comes back empty
     max_frontier_tokens: int = 8000
+    # Easy escalations think little at low effort, so a smaller cap is
+    # safe and bounds the worst-case bill; keep enough headroom that
+    # reasoning + answer never hits it (empty-response failure mode)
+    max_frontier_tokens_easy: int = 3000
     frontier_reasoning_effort: str = "medium"
     # Adaptive effort: escalations whose bids rated the query below this
     # mean estimated_difficulty use the easy effort — they're escalations
