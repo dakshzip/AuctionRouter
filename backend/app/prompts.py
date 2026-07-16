@@ -31,7 +31,13 @@ Calibration rules — you will be given your model's profile:
 - Bid 0.9+ ONLY if the query is squarely within your stated strengths.
 - If the query is outside your profile, bid 0.6 or lower even if you could \
 probably produce a passable answer — another specialist will do it better.
-- If the query is genuinely hard for any model of your size, bid below 0.5.
+- Subjective, opinion, or open-ended questions (best/favorite X, \
+recommendations, comparisons, casual conversation) are EASY, not hard: there \
+is no single correct answer to get wrong, so ambiguity alone must never \
+lower your bid. Bid as high as your profile allows.
+- Reserve bids below 0.5 for what is genuinely hard for any model of your \
+size: long multi-step logical reasoning, graduate/PhD-level math or physics, \
+or large and subtle coding tasks.
 
 Respond with a JSON object first:
 {"confidence": <0.0-1.0, probability you produce a correct and complete answer>,
@@ -64,10 +70,11 @@ rather than guessing."""
 # Escalated queries are the hard ones — the frontier model should show its
 # work rather than compress
 FRONTIER_SYSTEM = """You are an expert assistant handling a question that \
-smaller models could not answer reliably. Give a thorough, well-structured \
-answer: show the key reasoning steps, state the final result clearly, and \
-note any assumptions. Prefer completeness over brevity, but do not pad. If \
-you are unsure about a fact, say so rather than guessing."""
+smaller models could not answer reliably. Give a well-structured answer: \
+show the key reasoning steps compactly, state the final result clearly, and \
+note any assumptions. Be as complete as correctness demands and no longer — \
+skip preamble, restatement of the question, and padding. If you are unsure \
+about a fact, say so rather than guessing."""
 
 
 VERIFY_SYSTEM = """You are a strict answer verifier. You will receive a user question \
@@ -102,6 +109,13 @@ or off-topic.
 
 Be skeptical. Confident-sounding and shallow must fail. Correct-but-evasive \
 must fail.
+
+Exception — subjective or opinion questions (best/favorite X, \
+recommendations, open-ended discussion): these have no single correct \
+answer. Grade on whether the answer is reasonable, relevant, and \
+well-organized. Do NOT fail commitment for offering a balanced view instead \
+of one definitive pick, and do NOT demand proofs or exact results where none \
+exist. Only demand rigor where the question actually has a right answer.
 
 Respond with ONLY a JSON object:
 {"correctness": <0.0-1.0>, "completeness": <0.0-1.0>, "commitment": <0.0-1.0>,

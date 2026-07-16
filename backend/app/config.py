@@ -116,7 +116,9 @@ class Settings(BaseSettings):
     auction_w_cost: float = 0.1
 
     # Escalation thresholds (PRD section 9)
-    min_auction_confidence: float = 0.75
+    # Pre-filter only — the verifier still gates every tier-1 draft, so
+    # this can be loose; it exists to skip drafting obviously-doomed answers
+    min_auction_confidence: float = 0.65
     verification_threshold: float = 0.80
     disagreement_stddev: float = 0.22
     # Skip the disagreement check when some bidder is at least this
@@ -151,9 +153,10 @@ class Settings(BaseSettings):
     history_max_chars_answer: int = 12000
     history_max_turns_verify: int = 6
     history_max_chars_verify: int = 4000
-    # Frontier gets extra headroom since reasoning tokens count against
-    # the cap (medium effort thinks longer than low)
-    max_frontier_tokens: int = 16000
+    # Frontier headroom: reasoning tokens count against the cap (medium
+    # effort thinks longer than low), so don't cut this too far or the
+    # answer comes back empty
+    max_frontier_tokens: int = 8000
     frontier_reasoning_effort: str = "medium"
     # Low effort keeps the verifier honest on easy answers without
     # spending 8s of chain-of-thought on a greeting
