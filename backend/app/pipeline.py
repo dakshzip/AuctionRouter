@@ -44,6 +44,20 @@ def _clamp(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
 
 
+# Confident bidders append their answer after this marker (see BID_SYSTEM),
+# letting the pipeline skip the separate draft round-trip
+_ANSWER_MARKER = "---ANSWER---"
+
+
+def _split_bid_content(content: str) -> tuple[str, Optional[str]]:
+    """Split a bid response into (json_part, speculative_answer)."""
+    if _ANSWER_MARKER not in content:
+        return content, None
+    json_part, _, answer = content.partition(_ANSWER_MARKER)
+    answer = answer.strip()
+    return json_part, answer or None
+
+
 async def _get_bid(model_key: str, query: str, accuracy: dict[str, float],
                    chat_history: list[dict]) -> tuple[Bid, Optional[Usage]]:
     spec = TIER1_MODELS[model_key]
@@ -53,14 +67,21 @@ async def _get_bid(model_key: str, query: str, accuracy: dict[str, float],
                           prompts.bid_user(query, chat_history, spec.specialty),
                           timeout=settings.bid_timeout_s,
                           max_tokens=settings.max_bid_tokens)
-        data = extract_json(resp.content)
+        json_part, speculative = _split_bid_content(resp.content)
+        data = extract_json(json_part)
+        confidence = _clamp(data.get("confidence", 0))
+        # Ignore answers from bidders below the speculation bar — an answer
+        # attached to a low bid means the model didn't follow the protocol
+        if confidence < settings.speculative_draft_confidence:
+            speculative = None
         bid = Bid(
             model_key=model_key,
             model_name=spec.display_name,
-            confidence=_clamp(data.get("confidence", 0)),
+            confidence=confidence,
             estimated_difficulty=_clamp(data.get("estimated_difficulty", 0.5)),
             reason=str(data.get("reason", ""))[:300],
             historical_accuracy=hist,
+            draft_answer=speculative,
         )
         usage = Usage(
             model_key=model_key, model_name=spec.display_name, stage="bid",
@@ -77,10 +98,39 @@ async def _get_bid(model_key: str, query: str, accuracy: dict[str, float],
 
 async def bid_collection(state: RouterState) -> RouterState:
     accuracy = await get_store().historical_accuracy()
-    results = await asyncio.gather(
-        *(_get_bid(key, state["query"], accuracy, state.get("history", []))
-          for key in TIER1_MODELS)
-    )
+    tasks = {
+        key: asyncio.ensure_future(
+            _get_bid(key, state["query"], accuracy, state.get("history", [])))
+        for key in TIER1_MODELS
+    }
+
+    # Two-phase wait: give everyone bid_soft_timeout_s; if a confident bid
+    # is already in hand, don't hold the auction for stragglers — cancel
+    # them and record timed-out bids.
+    done, pending = await asyncio.wait(tasks.values(),
+                                       timeout=settings.bid_soft_timeout_s)
+    if pending:
+        confident = any(
+            b.error is None and b.confidence >= settings.min_auction_confidence
+            for b, _ in (t.result() for t in done))
+        if not confident:
+            done, pending = await asyncio.wait(
+                tasks.values(),
+                timeout=max(settings.bid_timeout_s - settings.bid_soft_timeout_s, 0))
+        for t in pending:
+            t.cancel()
+
+    results = []
+    for key, task in tasks.items():
+        if task in pending:
+            spec = TIER1_MODELS[key]
+            hist = accuracy.get(key, settings.default_historical_accuracy)
+            results.append((Bid(model_key=key, model_name=spec.display_name,
+                                confidence=0.0, reason="bid timed out (soft)",
+                                historical_accuracy=hist,
+                                error="cancelled: soft bid timeout"), None))
+        else:
+            results.append(task.result())
     bids = [b for b, _ in results]
     usages = [u for _, u in results if u is not None]
 
@@ -126,7 +176,11 @@ async def auction(state: RouterState) -> RouterState:
                     "escalation_reason": f"Strong model disagreement (stddev {spread:.2f} > {settings.disagreement_stddev})"}
 
     winner = max(valid, key=lambda b: b.auction_score)
-    return {"winner": winner.model_key, "escalated": False}
+    out: RouterState = {"winner": winner.model_key, "escalated": False}
+    if winner.draft_answer:
+        # The winning bid already carries an answer — skip the draft stage
+        out["draft_answer"] = winner.draft_answer
+    return out
 
 
 async def draft(state: RouterState) -> RouterState:
@@ -261,7 +315,10 @@ async def finalize(state: RouterState) -> RouterState:
 
 
 def _after_auction(state: RouterState) -> str:
-    return "escalate" if state.get("escalated") else "draft"
+    if state.get("escalated"):
+        return "escalate"
+    # Winner's bid carried a speculative answer: verify it directly
+    return "verify" if state.get("draft_answer") else "draft"
 
 
 def _after_draft(state: RouterState) -> str:
@@ -283,7 +340,8 @@ def build_graph():
 
     g.set_entry_point("bid_collection")
     g.add_edge("bid_collection", "auction")
-    g.add_conditional_edges("auction", _after_auction, {"escalate": "escalate", "draft": "draft"})
+    g.add_conditional_edges("auction", _after_auction,
+                            {"escalate": "escalate", "draft": "draft", "verify": "verify"})
     g.add_conditional_edges("draft", _after_draft, {"escalate": "escalate", "verify": "verify"})
     g.add_conditional_edges("verify", _after_verify, {"escalate": "escalate", "finalize": "finalize"})
     g.add_edge("escalate", END)
@@ -307,6 +365,12 @@ def _make_run(query: str, final: dict, start: float) -> RunResult:
     # Baseline: the same in/out volume sent straight to the frontier model
     answer_tokens_in = sum(u.tokens_in for u in usages if u.stage in ("draft", "escalate"))
     answer_tokens_out = sum(u.tokens_out for u in usages if u.stage in ("draft", "escalate"))
+    if final.get("tier") == 1 and not any(u.stage == "draft" for u in usages):
+        # Speculative-draft path: the answer tokens live in the winner's bid
+        winner_bids = [u for u in usages
+                       if u.stage == "bid" and u.model_key == final.get("winner")]
+        answer_tokens_in += sum(u.tokens_in for u in winner_bids)
+        answer_tokens_out += sum(u.tokens_out for u in winner_bids)
     baseline_cost = BASELINE_MODEL.estimate_cost(
         max(answer_tokens_in, 100), max(answer_tokens_out, 300))
 
@@ -373,31 +437,36 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
 
     if not state.get("escalated"):
         spec = TIER1_MODELS[state["winner"]]
-        yield {"type": "stage", "stage": "drafting", "model": spec.display_name}
-        try:
-            # Draft tokens are NOT forwarded to the client: the draft isn't
-            # final until verification passes, and streaming text that later
-            # gets replaced by the frontier answer is a confusing UX.
-            resp = None
-            async for ev in chat_stream(spec, prompts.ANSWER_SYSTEM, query,
-                                        history=state["history"]):
-                if ev["type"] == "final":
-                    resp = ev["response"]
-            if resp is None or not resp.content.strip():
+        if state.get("draft_answer"):
+            # Winner's bid already carried the answer — no draft call needed
+            yield {"type": "stage", "stage": "drafting",
+                   "model": spec.display_name, "speculative": True}
+        else:
+            yield {"type": "stage", "stage": "drafting", "model": spec.display_name}
+            try:
+                # Draft tokens are NOT forwarded to the client: the draft isn't
+                # final until verification passes, and streaming text that later
+                # gets replaced by the frontier answer is a confusing UX.
+                resp = None
+                async for ev in chat_stream(spec, prompts.ANSWER_SYSTEM, query,
+                                            history=state["history"]):
+                    if ev["type"] == "final":
+                        resp = ev["response"]
+                if resp is None or not resp.content.strip():
+                    state["escalated"] = True
+                    state["escalation_reason"] = f"{spec.display_name} returned an empty draft"
+                else:
+                    state["draft_answer"] = resp.content
+                    state["usages"] = state["usages"] + [Usage(
+                        model_key=spec.key, model_name=spec.display_name, stage="draft",
+                        tokens_in=resp.tokens_in, tokens_out=resp.tokens_out,
+                        cost_usd=spec.estimate_cost(resp.tokens_in, resp.tokens_out,
+                                                    resp.served_model),
+                        latency_ms=resp.latency_ms,
+                    )]
+            except LLMError as e:
                 state["escalated"] = True
-                state["escalation_reason"] = f"{spec.display_name} returned an empty draft"
-            else:
-                state["draft_answer"] = resp.content
-                state["usages"] = state["usages"] + [Usage(
-                    model_key=spec.key, model_name=spec.display_name, stage="draft",
-                    tokens_in=resp.tokens_in, tokens_out=resp.tokens_out,
-                    cost_usd=spec.estimate_cost(resp.tokens_in, resp.tokens_out,
-                                                resp.served_model),
-                    latency_ms=resp.latency_ms,
-                )]
-        except LLMError as e:
-            state["escalated"] = True
-            state["escalation_reason"] = f"Winner failed to answer: {str(e)[:150]}"
+                state["escalation_reason"] = f"Winner failed to answer: {str(e)[:150]}"
 
         if state.get("draft_answer"):
             yield {"type": "stage", "stage": "verifying"}
@@ -414,10 +483,10 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
                 yield {"type": "stage", "stage": "delivering",
                        "model": spec.display_name}
                 text = state["draft_answer"]
-                step = 80
+                step = 240
                 for i in range(0, len(text), step):
                     yield {"type": "token", "text": text[i:i + step]}
-                    await asyncio.sleep(0.02)
+                    await asyncio.sleep(0.01)
 
     if state.get("escalated"):
         yield {"type": "stage", "stage": "escalating",

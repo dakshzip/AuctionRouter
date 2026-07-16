@@ -87,7 +87,7 @@ async def chat(model: ModelSpec, system: str, user: str,
         )
         if resp.status_code != 429 or attempt == attempts - 1:
             break
-        retry_after = min(float(resp.headers.get("Retry-After", 2)), 5.0)
+        retry_after = min(float(resp.headers.get("Retry-After", 2)), 2.0)
         await asyncio.sleep(retry_after)
 
     latency_ms = int((time.monotonic() - start) * 1000)
@@ -144,7 +144,7 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
             timeout=timeout or settings.request_timeout_s,
         ) as resp:
             if resp.status_code == 429 and attempt < attempts - 1:
-                retry_after = min(float(resp.headers.get("Retry-After", 2)), 5.0)
+                retry_after = min(float(resp.headers.get("Retry-After", 2)), 2.0)
                 await asyncio.sleep(retry_after)
                 continue
             if resp.status_code != 200:

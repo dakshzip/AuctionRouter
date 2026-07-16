@@ -125,11 +125,19 @@ class Settings(BaseSettings):
 
     request_timeout_s: float = 60.0
     bid_timeout_s: float = 20.0
+    # Stop waiting for straggler bidders once a confident bid is in hand
+    bid_soft_timeout_s: float = 8.0
+
+    # Bidders at or above this confidence append a speculative answer to
+    # their bid, letting the pipeline skip the separate draft round-trip
+    speculative_draft_confidence: float = 0.8
 
     # Cap completion size so a single answer can't blow the budget
     # (also keeps low-credit OpenRouter keys usable)
     max_answer_tokens: int = 2000
-    max_bid_tokens: int = 300
+    # Bids without a speculative answer stay ~100 tokens; the cap only
+    # bites on answer-carrying bids
+    max_bid_tokens: int = 1600
 
     # Conversation history caps per pipeline stage (turns are single
     # messages, so 4 turns = 2 user/assistant exchanges)

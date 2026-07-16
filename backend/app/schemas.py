@@ -26,6 +26,7 @@ class Bid(BaseModel):
     cost_factor: float = 0.0          # normalized 0..1 across tier-1 models
     auction_score: float = 0.0
     error: Optional[str] = None       # set when a bidder failed / timed out
+    draft_answer: Optional[str] = None  # speculative answer from a confident bidder
 
 
 class Verification(BaseModel):

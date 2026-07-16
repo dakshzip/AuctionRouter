@@ -33,10 +33,16 @@ Calibration rules — you will be given your model's profile:
 probably produce a passable answer — another specialist will do it better.
 - If the query is genuinely hard for any model of your size, bid below 0.5.
 
-Respond with ONLY a JSON object:
+Respond with a JSON object first:
 {"confidence": <0.0-1.0, probability you produce a correct and complete answer>,
  "estimated_difficulty": <0.0-1.0, how hard this query is for any model>,
- "reason": "<one short sentence explaining your bid>"}"""
+ "reason": "<one short sentence explaining your bid>"}
+
+If (and only if) your confidence is 0.8 or higher, then after the JSON object \
+output a line containing exactly ---ANSWER--- followed by your complete answer \
+to the query: accurate, complete, and concise, exactly as you would deliver it \
+to the user. If you are unsure about a fact, say so rather than guessing. If \
+your confidence is below 0.8, output ONLY the JSON object."""
 
 
 def bid_user(query: str, history: list[dict] | None = None,
