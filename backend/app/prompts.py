@@ -1,9 +1,37 @@
 """Prompt templates for bidding, answering, and verification."""
 
+
+def format_history(history: list[dict], max_turns: int, max_chars: int) -> str:
+    """Render recent conversation turns as a compact transcript.
+
+    Takes the most recent `max_turns` turns, truncates long turns so the
+    whole transcript fits in `max_chars`, and returns "" for no history.
+    """
+    turns = history[-max_turns:] if history else []
+    if not turns:
+        return ""
+    per_turn = max(200, max_chars // len(turns))
+    lines = []
+    for t in turns:
+        content = t["content"]
+        if len(content) > per_turn:
+            content = content[:per_turn] + " […truncated]"
+        lines.append(f"{t['role'].upper()}: {content}")
+    return "\n".join(lines)[:max_chars]
+
 BID_SYSTEM = """You are a bidding agent for a specific language model competing in an \
 auction to answer a user query. Assess honestly how well YOUR model would handle the \
 query. Overbidding hurts you: your answer will be checked by an independent verifier, \
 and failures lower your historical accuracy in future auctions.
+
+A conversation transcript may precede the query; you are bidding on answering \
+the LATEST user message in that conversation, which may depend on the context.
+
+Calibration rules — you will be given your model's profile:
+- Bid 0.9+ ONLY if the query is squarely within your stated strengths.
+- If the query is outside your profile, bid 0.6 or lower even if you could \
+probably produce a passable answer — another specialist will do it better.
+- If the query is genuinely hard for any model of your size, bid below 0.5.
 
 Respond with ONLY a JSON object:
 {"confidence": <0.0-1.0, probability you produce a correct and complete answer>,
@@ -11,29 +39,75 @@ Respond with ONLY a JSON object:
  "reason": "<one short sentence explaining your bid>"}"""
 
 
-def bid_user(query: str) -> str:
-    return f"User query to bid on:\n\n{query}"
+def bid_user(query: str, history: list[dict] | None = None,
+             specialty: str = "") -> str:
+    from .config import settings
+    profile = f"YOUR MODEL'S PROFILE: {specialty}\n\n" if specialty else ""
+    transcript = format_history(history or [], settings.history_max_turns_bid,
+                                settings.history_max_chars_bid)
+    if transcript:
+        return (f"{profile}CONVERSATION SO FAR:\n{transcript}\n\n"
+                f"LATEST user message to bid on:\n\n{query}")
+    return f"{profile}User query to bid on:\n\n{query}"
 
 
 ANSWER_SYSTEM = """You are a helpful expert assistant. Answer the user's query \
 accurately and completely. Be concise. If you are unsure about a fact, say so \
 rather than guessing."""
 
+# Escalated queries are the hard ones — the frontier model should show its
+# work rather than compress
+FRONTIER_SYSTEM = """You are an expert assistant handling a question that \
+smaller models could not answer reliably. Give a thorough, well-structured \
+answer: show the key reasoning steps, state the final result clearly, and \
+note any assumptions. Prefer completeness over brevity, but do not pad. If \
+you are unsure about a fact, say so rather than guessing."""
+
 
 VERIFY_SYSTEM = """You are a strict answer verifier. You will receive a user question \
-and a candidate answer produced by another model. Evaluate:
-1. Correctness — are the facts and logic right?
-2. Completeness — does it fully address the question?
-3. Reasoning quality — is the reasoning sound?
-4. Hallucination risk — any invented facts, citations, or details?
+and a candidate answer produced by another model.
 
-Be skeptical. A confident-sounding wrong answer must fail.
+A conversation transcript may precede the question; the answer must make sense \
+as a reply to the LATEST question in that context. An answer that ignores the \
+established context fails completeness.
+
+Step 1 — before reading the answer, list what the question actually demands: \
+every specific quantity, proof, or conclusion it asks for. The hardest \
+sub-question is the one that matters most.
+
+Step 2 — grade the answer against that list on four dimensions, each 0.0-1.0:
+- correctness: are the facts and logic right? Verify calculations yourself.
+- completeness: is every demand met? An answer that covers easy parts but \
+never delivers the hard part (e.g. a section titled with the question that \
+never states the result) scores LOW here, no matter how polished it looks.
+- commitment: does it state results plainly and prove them? Hedging \
+("provided we are clever", "this is equivalent, however..."), restating the \
+question instead of answering it, or never landing on a final result is a \
+failure of commitment.
+- presentation: leaked thinking-out-loud ("Wait...", "Hmm...", "let me \
+recalculate", abandoned attempts, self-contradictions, conflicting final \
+values) caps this at 0.5.
+
+The overall score is the MINIMUM of the four — an answer is only as good as \
+its weakest dimension. Calibration: 0.9+ means an expert would sign off on it \
+as complete and correct; 0.7 means right but with real gaps; 0.5 means \
+correct skeleton, core question not actually answered; below 0.3 means wrong \
+or off-topic.
+
+Be skeptical. Confident-sounding and shallow must fail. Correct-but-evasive \
+must fail.
 
 Respond with ONLY a JSON object:
-{"score": <0.0-1.0 overall quality>,
- "pass": <true if score >= 0.80 and no hallucinations detected>,
- "feedback": "<one or two sentences justifying the score>"}"""
+{"correctness": <0.0-1.0>, "completeness": <0.0-1.0>, "commitment": <0.0-1.0>,
+ "presentation": <0.0-1.0>,
+ "score": <minimum of the four>,
+ "pass": <true if score >= 0.80>,
+ "feedback": "<two or three sentences: what the question demanded, what was missing or wrong>"}"""
 
 
-def verify_user(query: str, answer: str) -> str:
-    return f"QUESTION:\n{query}\n\nCANDIDATE ANSWER:\n{answer}"
+def verify_user(query: str, answer: str, history: list[dict] | None = None) -> str:
+    from .config import settings
+    transcript = format_history(history or [], settings.history_max_turns_verify,
+                                settings.history_max_chars_verify)
+    prefix = f"CONVERSATION SO FAR:\n{transcript}\n\n" if transcript else ""
+    return f"{prefix}QUESTION:\n{query}\n\nCANDIDATE ANSWER:\n{answer}"

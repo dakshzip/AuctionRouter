@@ -1,4 +1,4 @@
-import type { MetricsSummary, RunResult } from "./types";
+import type { ChatTurn, MetricsSummary, RunResult } from "./types";
 
 // Same origin in production (FastAPI serves the static export);
 // the local backend during `next dev`.
@@ -15,12 +15,61 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export function submitQuery(query: string): Promise<RunResult> {
+export function submitQuery(
+  query: string,
+  history: ChatTurn[] = [],
+): Promise<RunResult> {
   return request<RunResult>("/api/query", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, history }),
   });
+}
+
+export interface StreamEvent {
+  type: "stage" | "auction" | "token" | "verification" | "frontier_failed" | "error" | "done";
+  stage?: "bidding" | "drafting" | "verifying" | "delivering" | "escalating";
+  model?: string;
+  text?: string;
+  reason?: string | null;
+  message?: string;
+  score?: number;
+  passed?: boolean;
+  feedback?: string;
+  winner?: string | null;
+  escalated?: boolean;
+  run?: RunResult;
+}
+
+// POST + NDJSON reader (EventSource is GET-only)
+export async function streamQuery(
+  query: string,
+  history: ChatTurn[],
+  onEvent: (ev: StreamEvent) => void,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/query/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, history }),
+  });
+  if (!res.ok || !res.body) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`${res.status}: ${body.slice(0, 300)}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (line) onEvent(JSON.parse(line) as StreamEvent);
+    }
+  }
 }
 
 export function fetchMetrics(): Promise<MetricsSummary> {

@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 const BOTS = [
   { name: "GEMMA", color: "#fb923c", dark: "#9a3412" },
   { name: "DEEPSEEK", color: "#38bdf8", dark: "#075985" },
-  { name: "QWEN", color: "#a3e635", dark: "#3f6212" },
+  { name: "QWEN-CODER", color: "#a3e635", dark: "#3f6212" },
 ];
 
 // 8x8 robot sprite: 0 empty, 1 body, 2 eye, 3 antenna

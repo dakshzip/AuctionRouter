@@ -1,3 +1,8 @@
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface Bid {
   model_key: string;
   model_name: string;

@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { submitQuery } from "@/lib/api";
-import type { RunResult } from "@/lib/types";
+import { streamQuery } from "@/lib/api";
+import type { ChatTurn, RunResult } from "@/lib/types";
 import { Badge } from "./ui";
 import { Markdown } from "./Markdown";
 
@@ -10,6 +10,35 @@ interface ChatMessage {
   role: "user" | "assistant" | "error";
   text: string;
   run?: RunResult;
+}
+
+interface LiveState {
+  status: string;
+  text: string;
+  escalating: boolean;
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+      className={`ml-auto border px-1.5 font-[family-name:var(--font-pixel)] text-[7px] uppercase leading-4 ${
+        copied
+          ? "border-green-600 text-green-400"
+          : "border-stone-600 text-stone-500 hover:border-orange-500 hover:text-orange-400"
+      }`}
+      title="copy answer"
+    >
+      {copied ? "✓ copied" : "copy"}
+    </button>
+  );
 }
 
 export function Chat({
@@ -23,32 +52,85 @@ export function Chat({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [live, setLive] = useState<LiveState | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const scroll = () =>
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
 
   async function send() {
     const query = input.trim();
-    if (!query || busy) return;
+    if (!query || live) return;
+    // Prior turns (excluding errors) give the pipeline conversation context
+    const history: ChatTurn[] = messages
+      .filter((m) => m.role !== "error")
+      .slice(-12)
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.text.slice(0, 8000),
+      }));
     setInput("");
-    setBusy(true);
     setMessages((m) => [...m, { role: "user", text: query }]);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
+    setLive({ status: "⚡ AUCTION IN PROGRESS…", text: "", escalating: false });
+    scroll();
     try {
-      const run = await submitQuery(query);
-      setMessages((m) => [...m, { role: "assistant", text: run.answer, run }]);
-      onRun(run);
+      await streamQuery(query, history, (ev) => {
+        switch (ev.type) {
+          case "stage":
+            if (ev.stage === "bidding")
+              setLive((l) => l && { ...l, status: "⚡ AUCTION IN PROGRESS…" });
+            else if (ev.stage === "drafting")
+              setLive((l) => l && { ...l, status: `✍ ${ev.model} DRAFTING…` });
+            else if (ev.stage === "verifying")
+              setLive((l) => l && { ...l, status: "🔍 VERIFIER JUDGING…" });
+            else if (ev.stage === "delivering")
+              setLive((l) => l && { ...l, status: `✓ VERIFIED — ${ev.model}` });
+            else if (ev.stage === "escalating")
+              // frontier rewrites from scratch: clear the failed draft
+              setLive((l) => l && {
+                status: `⚔ BOSS FIGHT: ${ev.model}…`,
+                text: "",
+                escalating: true,
+              });
+            break;
+          case "token":
+            setLive((l) => l && { ...l, text: l.text + (ev.text ?? "") });
+            break;
+          case "verification":
+            if (!ev.passed)
+              setLive((l) => l && {
+                ...l,
+                status: `✖ VERIFICATION FAILED (${ev.score?.toFixed(2)})`,
+              });
+            break;
+          case "frontier_failed":
+            setLive((l) => l && { ...l, status: "⚠ FRONTIER UNAVAILABLE — USING DRAFT" });
+            break;
+          case "error":
+            throw new Error(ev.message);
+          case "done":
+            if (ev.run) {
+              const run = ev.run;
+              setMessages((m) => [...m, { role: "assistant", text: run.answer, run }]);
+              onRun(run);
+            }
+            setLive(null);
+            scroll();
+            break;
+        }
+      });
     } catch (e) {
       setMessages((m) => [...m, { role: "error", text: String(e) }]);
     } finally {
-      setBusy(false);
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
+      setLive(null);
+      scroll();
     }
   }
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-        {messages.length === 0 && (
+        {messages.length === 0 && !live && (
           <div className="flex h-full items-center justify-center">
             <div className="max-w-md border-2 border-dashed border-stone-700 p-5 text-center text-stone-500">
               <div className="mb-2 font-[family-name:var(--font-pixel)] text-[10px] text-orange-500">
@@ -77,9 +159,9 @@ export function Chat({
             </div>
           ) : (
             <div key={i} className="flex justify-start">
-              <button
+              <div
                 onClick={() => msg.run && onSelectRun(msg.run)}
-                className={`max-w-[85%] cursor-pointer border-2 px-3 py-2 text-left shadow-[3px_3px_0_0_#000] ${
+                className={`max-w-[85%] cursor-pointer select-text border-2 px-3 py-2 text-left shadow-[3px_3px_0_0_#000] ${
                   msg.run && msg.run.id === selectedRunId
                     ? "border-orange-500 bg-stone-900"
                     : "border-stone-700 bg-stone-950 hover:border-stone-500"
@@ -94,20 +176,34 @@ export function Chat({
                     ${msg.run?.total_cost_usd.toFixed(5)} ·{" "}
                     {((msg.run?.latency_ms ?? 0) / 1000).toFixed(1)}s
                   </span>
+                  <CopyButton text={msg.text} />
                 </div>
                 <div className="text-stone-200">
                   <Markdown>{msg.text}</Markdown>
                 </div>
-              </button>
+              </div>
             </div>
           ),
         )}
-        {busy && (
-          <div className="flex items-center gap-2 text-orange-500">
-            <span className="blink">▓</span>
-            <span className="text-sm text-stone-400">
-              auction → draft → verify…
-            </span>
+        {live && (
+          <div className="flex justify-start">
+            <div
+              className={`max-w-[85%] border-2 px-3 py-2 shadow-[3px_3px_0_0_#000] ${
+                live.escalating
+                  ? "border-orange-600 bg-orange-950/20"
+                  : "border-stone-700 bg-stone-950"
+              }`}
+            >
+              <div className="mb-1.5 flex items-center gap-2 font-[family-name:var(--font-pixel)] text-[8px] text-orange-400">
+                <span className="blink">▓</span>
+                {live.status}
+              </div>
+              {live.text && (
+                <div className="text-stone-200">
+                  <Markdown>{live.text}</Markdown>
+                </div>
+              )}
+            </div>
           </div>
         )}
         <div ref={bottomRef} />
@@ -129,7 +225,7 @@ export function Chat({
         />
         <button
           onClick={send}
-          disabled={busy || !input.trim()}
+          disabled={!!live || !input.trim()}
           className="pixel-btn bg-orange-950 px-5 font-[family-name:var(--font-pixel)] text-[10px] uppercase text-orange-400 disabled:cursor-not-allowed disabled:text-stone-600"
         >
           send

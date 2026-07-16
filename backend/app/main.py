@@ -11,9 +11,13 @@ from fastapi import FastAPI, HTTPException  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
+import json  # noqa: E402
+
+from fastapi.responses import StreamingResponse  # noqa: E402
+
 from .config import TIER1_MODELS, TIER2_MODEL, VERIFIER_MODEL, settings  # noqa: E402
 from .llm import close_client  # noqa: E402
-from .pipeline import run_query  # noqa: E402
+from .pipeline import run_query, run_query_stream  # noqa: E402
 from .schemas import MetricsSummary, QueryRequest, RunResult  # noqa: E402
 from .store import get_store  # noqa: E402
 
@@ -50,7 +54,24 @@ async def health():
 async def query(req: QueryRequest):
     if not settings.openrouter_api_key:
         raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY is not set")
-    return await run_query(req.query)
+    return await run_query(req.query, [t.model_dump() for t in req.history])
+
+
+@app.post("/api/query/stream")
+async def query_stream(req: QueryRequest):
+    if not settings.openrouter_api_key:
+        raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY is not set")
+
+    history = [t.model_dump() for t in req.history]
+
+    async def gen():
+        try:
+            async for event in run_query_stream(req.query, history):
+                yield json.dumps(event) + "\n"
+        except Exception as e:  # surface pipeline crashes to the client
+            yield json.dumps({"type": "error", "message": str(e)[:300]}) + "\n"
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
 
 
 @app.get("/api/runs", response_model=list[RunResult])

@@ -6,8 +6,14 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=8000)
+
+
 class QueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=8000)
+    history: list[ChatTurn] = Field(default=[], max_length=20)
 
 
 class Bid(BaseModel):
