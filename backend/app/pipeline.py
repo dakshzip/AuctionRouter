@@ -66,7 +66,8 @@ async def _get_bid(model_key: str, query: str, accuracy: dict[str, float],
         resp = await chat(spec, prompts.BID_SYSTEM,
                           prompts.bid_user(query, chat_history, spec.specialty),
                           timeout=settings.bid_timeout_s,
-                          max_tokens=settings.max_bid_tokens)
+                          max_tokens=settings.max_bid_tokens,
+                          prefer_paid=True)
         json_part, speculative = _split_bid_content(resp.content)
         data = extract_json(json_part)
         confidence = _clamp(data.get("confidence", 0))
@@ -104,21 +105,26 @@ async def bid_collection(state: RouterState) -> RouterState:
         for key in TIER1_MODELS
     }
 
-    # Two-phase wait: give everyone bid_soft_timeout_s; if a confident bid
-    # is already in hand, don't hold the auction for stragglers — cancel
-    # them and record timed-out bids.
-    done, pending = await asyncio.wait(tasks.values(),
-                                       timeout=settings.bid_soft_timeout_s)
-    if pending:
+    # Don't hold the auction for stragglers: once a confident bid lands,
+    # the rest get bid_grace_s more, then they're cancelled and recorded
+    # as timed-out bids.
+    hard_deadline = time.monotonic() + settings.bid_timeout_s
+    deadline = hard_deadline
+    pending = set(tasks.values())
+    while pending:
+        timeout = deadline - time.monotonic()
+        if timeout <= 0:
+            break
+        done, pending = await asyncio.wait(
+            pending, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
         confident = any(
             b.error is None and b.confidence >= settings.min_auction_confidence
             for b, _ in (t.result() for t in done))
-        if not confident:
-            done, pending = await asyncio.wait(
-                tasks.values(),
-                timeout=max(settings.bid_timeout_s - settings.bid_soft_timeout_s, 0))
-        for t in pending:
-            t.cancel()
+        if confident:
+            deadline = min(deadline,
+                           time.monotonic() + settings.bid_grace_s)
+    for t in pending:
+        t.cancel()
 
     results = []
     for key, task in tasks.items():
@@ -216,7 +222,7 @@ async def verify(state: RouterState) -> RouterState:
         resp = await chat(VERIFIER_MODEL, prompts.VERIFY_SYSTEM,
                           prompts.verify_user(state["query"], state["draft_answer"],
                                               state.get("history")),
-                          reasoning_effort="medium")
+                          reasoning_effort=settings.verifier_reasoning_effort)
         data = extract_json(resp.content)
         score = _clamp(data.get("score", 0))
         # Enforce score = min(subscores) server-side; models sometimes

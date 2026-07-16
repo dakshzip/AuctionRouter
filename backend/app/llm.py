@@ -63,16 +63,21 @@ async def chat(model: ModelSpec, system: str, user: str,
                timeout: float | None = None,
                max_tokens: int | None = None,
                reasoning_effort: str | None = None,
-               history: list[dict] | None = None) -> LLMResponse:
+               history: list[dict] | None = None,
+               prefer_paid: bool = False) -> LLMResponse:
     start = time.monotonic()
+    # Latency-critical calls (bids) skip the free pool: paid endpoints
+    # respond in a fraction of the time and bids are only ~300 tokens
+    model_id = model.fallback_id if prefer_paid and model.fallback_id \
+        else model.openrouter_id
     body: dict = {
-        "model": model.openrouter_id,
+        "model": model_id,
         "messages": _build_messages(system, user, history),
         "max_tokens": max_tokens or settings.max_answer_tokens,
     }
     if reasoning_effort:
         body["reasoning"] = {"effort": reasoning_effort}
-    if model.fallback_id:
+    if model.fallback_id and not prefer_paid:
         # OpenRouter fallback routing: try free primary, then paid fallback
         body["models"] = [model.openrouter_id, model.fallback_id]
 
