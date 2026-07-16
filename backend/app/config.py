@@ -103,6 +103,9 @@ class Settings(BaseSettings):
 
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    # Provider routing preference: "latency" | "throughput" | "price";
+    # empty string keeps OpenRouter's default (price)
+    openrouter_provider_sort: str = "latency"
 
     mongodb_uri: str = ""          # empty -> in-memory store
     mongodb_db: str = "auctionrouter"

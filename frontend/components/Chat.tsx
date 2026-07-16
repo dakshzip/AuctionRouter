@@ -16,6 +16,8 @@ interface LiveState {
   status: string;
   text: string;
   escalating: boolean;
+  // Draft text streams before the verifier has judged it
+  provisional: boolean;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -71,7 +73,12 @@ export function Chat({
       }));
     setInput("");
     setMessages((m) => [...m, { role: "user", text: query }]);
-    setLive({ status: "⚡ AUCTION IN PROGRESS…", text: "", escalating: false });
+    setLive({
+      status: "⚡ AUCTION IN PROGRESS…",
+      text: "",
+      escalating: false,
+      provisional: false,
+    });
     scroll();
     try {
       await streamQuery(query, history, (ev) => {
@@ -80,17 +87,22 @@ export function Chat({
             if (ev.stage === "bidding")
               setLive((l) => l && { ...l, status: "⚡ AUCTION IN PROGRESS…" });
             else if (ev.stage === "drafting")
-              setLive((l) => l && { ...l, status: `✍ ${ev.model} DRAFTING…` });
+              setLive((l) =>
+                l && { ...l, status: `✍ ${ev.model} DRAFTING…`, provisional: true },
+              );
             else if (ev.stage === "verifying")
               setLive((l) => l && { ...l, status: "🔍 VERIFIER JUDGING…" });
             else if (ev.stage === "delivering")
-              setLive((l) => l && { ...l, status: `✓ VERIFIED — ${ev.model}` });
+              setLive((l) =>
+                l && { ...l, status: `✓ VERIFIED — ${ev.model}`, provisional: false },
+              );
             else if (ev.stage === "escalating")
               // frontier rewrites from scratch: clear the failed draft
               setLive((l) => l && {
                 status: `⚔ BOSS FIGHT: ${ev.model}…`,
                 text: "",
                 escalating: true,
+                provisional: false,
               });
             break;
           case "token":
@@ -197,6 +209,11 @@ export function Chat({
               <div className="mb-1.5 flex items-center gap-2 font-[family-name:var(--font-pixel)] text-[8px] text-orange-400">
                 <span className="blink">▓</span>
                 {live.status}
+                {live.provisional && live.text && (
+                  <span className="border border-amber-700 bg-amber-950/40 px-1 text-[7px] uppercase text-amber-500">
+                    unverified draft
+                  </span>
+                )}
               </div>
               {live.text && (
                 <div className="text-stone-200">

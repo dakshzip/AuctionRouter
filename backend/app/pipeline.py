@@ -193,7 +193,7 @@ async def draft(state: RouterState) -> RouterState:
     spec = TIER1_MODELS[state["winner"]]
     try:
         resp = await chat(spec, prompts.ANSWER_SYSTEM, state["query"],
-                          history=state.get("history"))
+                          history=state.get("history"), prefer_paid=True)
     except LLMError as e:
         return {"escalated": True, "escalation_reason": f"Winner failed to answer: {str(e)[:150]}"}
     if not resp.content.strip():
@@ -443,20 +443,32 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
 
     if not state.get("escalated"):
         spec = TIER1_MODELS[state["winner"]]
+        # Streaming-first: draft tokens go to the client as they exist, so
+        # the user reads while the verifier judges. A failed verification
+        # clears the provisional text via the existing "escalating" stage.
         if state.get("draft_answer"):
-            # Winner's bid already carried the answer — no draft call needed
+            # Winner's bid already carried the answer — verify it in
+            # parallel while the client renders the draft
             yield {"type": "stage", "stage": "drafting",
                    "model": spec.display_name, "speculative": True}
+            verify_task = asyncio.create_task(verify(state))
+            yield {"type": "stage", "stage": "verifying"}
+            text = state["draft_answer"]
+            step = 240
+            for i in range(0, len(text), step):
+                yield {"type": "token", "text": text[i:i + step]}
+                await asyncio.sleep(0.01)
+            state.update(await verify_task)
         else:
             yield {"type": "stage", "stage": "drafting", "model": spec.display_name}
             try:
-                # Draft tokens are NOT forwarded to the client: the draft isn't
-                # final until verification passes, and streaming text that later
-                # gets replaced by the frontier answer is a confusing UX.
                 resp = None
                 async for ev in chat_stream(spec, prompts.ANSWER_SYSTEM, query,
-                                            history=state["history"]):
-                    if ev["type"] == "final":
+                                            history=state["history"],
+                                            prefer_paid=True):
+                    if ev["type"] == "delta":
+                        yield {"type": "token", "text": ev["text"]}
+                    else:
                         resp = ev["response"]
                 if resp is None or not resp.content.strip():
                     state["escalated"] = True
@@ -473,26 +485,22 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
             except LLMError as e:
                 state["escalated"] = True
                 state["escalation_reason"] = f"Winner failed to answer: {str(e)[:150]}"
+            if state.get("draft_answer"):
+                yield {"type": "stage", "stage": "verifying"}
+                state.update(await verify(state))
 
-        if state.get("draft_answer"):
-            yield {"type": "stage", "stage": "verifying"}
-            state.update(await verify(state))
+        if state.get("verification"):
             yield {
                 "type": "verification",
                 **state["verification"].model_dump(),
                 "escalated": state.get("escalated", False),
                 "reason": state.get("escalation_reason"),
             }
-            if not state.get("escalated"):
-                # Draft is now verified-final: stream it to the client in
-                # chunks (it was generated silently during the draft stage)
-                yield {"type": "stage", "stage": "delivering",
-                       "model": spec.display_name}
-                text = state["draft_answer"]
-                step = 240
-                for i in range(0, len(text), step):
-                    yield {"type": "token", "text": text[i:i + step]}
-                    await asyncio.sleep(0.01)
+        if state.get("draft_answer") and not state.get("escalated"):
+            # Verified: flip the client's provisional badge; tokens were
+            # already streamed live
+            yield {"type": "stage", "stage": "delivering",
+                   "model": spec.display_name}
 
     if state.get("escalated"):
         yield {"type": "stage", "stage": "escalating",

@@ -59,15 +59,13 @@ def _build_messages(system: str, user: str,
     ]
 
 
-async def chat(model: ModelSpec, system: str, user: str,
-               timeout: float | None = None,
-               max_tokens: int | None = None,
-               reasoning_effort: str | None = None,
-               history: list[dict] | None = None,
-               prefer_paid: bool = False) -> LLMResponse:
-    start = time.monotonic()
-    # Latency-critical calls (bids) skip the free pool: paid endpoints
-    # respond in a fraction of the time and bids are only ~300 tokens
+def _request_body(model: ModelSpec, system: str, user: str,
+                  max_tokens: int | None,
+                  reasoning_effort: str | None,
+                  history: list[dict] | None,
+                  prefer_paid: bool) -> dict:
+    # Latency-critical calls (bids, drafts) skip the free pool: paid
+    # endpoints respond in a fraction of the time
     model_id = model.fallback_id if prefer_paid and model.fallback_id \
         else model.openrouter_id
     body: dict = {
@@ -80,6 +78,22 @@ async def chat(model: ModelSpec, system: str, user: str,
     if model.fallback_id and not prefer_paid:
         # OpenRouter fallback routing: try free primary, then paid fallback
         body["models"] = [model.openrouter_id, model.fallback_id]
+    if settings.openrouter_provider_sort:
+        # Route to the fastest provider for the model rather than the
+        # default (cheapest) — big variance cut for multi-provider models
+        body["provider"] = {"sort": settings.openrouter_provider_sort}
+    return body
+
+
+async def chat(model: ModelSpec, system: str, user: str,
+               timeout: float | None = None,
+               max_tokens: int | None = None,
+               reasoning_effort: str | None = None,
+               history: list[dict] | None = None,
+               prefer_paid: bool = False) -> LLMResponse:
+    start = time.monotonic()
+    body = _request_body(model, system, user, max_tokens,
+                         reasoning_effort, history, prefer_paid)
 
     # Free-tier models often 429 transiently ("rate-limited upstream,
     # retry shortly"), so retry a couple of times honoring Retry-After.
@@ -119,23 +133,17 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
                       timeout: float | None = None,
                       max_tokens: int | None = None,
                       reasoning_effort: str | None = None,
-                      history: list[dict] | None = None):
+                      history: list[dict] | None = None,
+                      prefer_paid: bool = False):
     """Streaming variant of chat().
 
     Yields {"type": "delta", "text": ...} per token chunk, then a final
     {"type": "final", "response": LLMResponse} with full content and usage.
     """
-    body: dict = {
-        "model": model.openrouter_id,
-        "messages": _build_messages(system, user, history),
-        "max_tokens": max_tokens or settings.max_answer_tokens,
-        "stream": True,
-        "stream_options": {"include_usage": True},
-    }
-    if reasoning_effort:
-        body["reasoning"] = {"effort": reasoning_effort}
-    if model.fallback_id:
-        body["models"] = [model.openrouter_id, model.fallback_id]
+    body = _request_body(model, system, user, max_tokens,
+                         reasoning_effort, history, prefer_paid)
+    body["stream"] = True
+    body["stream_options"] = {"include_usage": True}
 
     start = time.monotonic()
     parts: list[str] = []
