@@ -46,35 +46,42 @@ export default function Home() {
         </nav>
       </header>
 
-      {tab === "chat" ? (
-        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_440px]">
-          <section className="pixel-panel min-h-0 p-4">
-            <Chat
-              onRun={(run) => {
-                setSelectedRun(run);
-                setRunCount((c) => c + 1);
-              }}
-              selectedRunId={selectedRun?.id ?? null}
-              onSelectRun={setSelectedRun}
-            />
-          </section>
-          <aside className="min-h-0 space-y-4 overflow-y-auto pb-2 pr-2">
-            {selectedRun ? (
-              <>
-                <RoutingGraph run={selectedRun} />
-                <AuctionPanel run={selectedRun} />
-                <VerificationPanel run={selectedRun} />
-              </>
-            ) : (
-              <BidArcade />
-            )}
-          </aside>
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto pb-2 pr-2">
-          <MetricsDashboard refreshKey={runCount} />
-        </div>
-      )}
+      {/* Both tabs stay mounted (hidden via CSS) so the chat conversation
+          and any in-flight query survive switching to metrics and back */}
+      <div
+        className={`min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_440px] ${
+          tab === "chat" ? "grid" : "hidden"
+        }`}
+      >
+        <section className="pixel-panel min-h-0 p-4">
+          <Chat
+            onRun={(run) => {
+              setSelectedRun(run);
+              setRunCount((c) => c + 1);
+            }}
+            selectedRunId={selectedRun?.id ?? null}
+            onSelectRun={setSelectedRun}
+          />
+        </section>
+        <aside className="min-h-0 space-y-4 overflow-y-auto pb-2 pr-2">
+          {selectedRun ? (
+            <>
+              <RoutingGraph run={selectedRun} />
+              <AuctionPanel run={selectedRun} />
+              <VerificationPanel run={selectedRun} />
+            </>
+          ) : (
+            <BidArcade />
+          )}
+        </aside>
+      </div>
+      <div
+        className={`min-h-0 flex-1 overflow-y-auto pb-2 pr-2 ${
+          tab === "metrics" ? "" : "hidden"
+        }`}
+      >
+        <MetricsDashboard refreshKey={runCount} />
+      </div>
     </div>
   );
 }
