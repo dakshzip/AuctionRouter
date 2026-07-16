@@ -28,6 +28,9 @@ export default function Home() {
           <p className="mt-2 text-base leading-none text-stone-500">
             cheap models bid → winner drafts → verifier judges → bosses escalate
           </p>
+          <p className="mt-1.5 font-[family-name:var(--font-pixel)] text-[9px] uppercase leading-none text-orange-500/80">
+            stop paying frontier prices for every query
+          </p>
         </div>
         <nav className="flex gap-2">
           {(["chat", "metrics"] as Tab[]).map((t) => (
