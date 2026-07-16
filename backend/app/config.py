@@ -158,6 +158,11 @@ class Settings(BaseSettings):
     # answer comes back empty
     max_frontier_tokens: int = 8000
     frontier_reasoning_effort: str = "medium"
+    # Adaptive effort: escalations whose bids rated the query below this
+    # mean estimated_difficulty use the easy effort — they're escalations
+    # of convenience (failed verification on an easy query), not hard ones
+    frontier_difficulty_threshold: float = 0.6
+    frontier_easy_reasoning_effort: str = "low"
     # Low effort keeps the verifier honest on easy answers without
     # spending 8s of chain-of-thought on a greeting
     verifier_reasoning_effort: str = "low"
