@@ -6,18 +6,23 @@ def format_history(history: list[dict], max_turns: int, max_chars: int) -> str:
 
     Takes the most recent `max_turns` turns, truncates long turns so the
     whole transcript fits in `max_chars`, and returns "" for no history.
+
+    The per-turn budget is fixed (max_chars / max_turns, NOT divided by
+    the actual turn count) so a turn renders byte-identically on every
+    query — a stable prompt prefix is what lets provider-side prompt
+    caching hit as the conversation grows.
     """
     turns = history[-max_turns:] if history else []
     if not turns:
         return ""
-    per_turn = max(200, max_chars // len(turns))
+    per_turn = max(200, max_chars // max_turns)
     lines = []
     for t in turns:
         content = t["content"]
         if len(content) > per_turn:
             content = content[:per_turn] + " […truncated]"
         lines.append(f"{t['role'].upper()}: {content}")
-    return "\n".join(lines)[:max_chars]
+    return "\n".join(lines)
 
 BID_SYSTEM = """You are a bidding agent for a specific language model competing in an \
 auction to answer a user query. Assess honestly how well YOUR model would handle the \

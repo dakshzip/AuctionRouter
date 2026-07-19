@@ -456,10 +456,17 @@ def _save_run_bg(run: RunResult) -> None:
 
 
 def _trim_history(history: list[dict] | None) -> list[dict]:
-    """Answer-level cap: most recent turns, per-turn char truncation."""
+    """Answer-level cap: most recent turns, per-turn char truncation.
+
+    The per-turn budget is fixed (not divided by the actual turn count)
+    so an old turn is truncated identically on every query — the stable
+    message prefix is what lets provider-side prompt caching hit as the
+    conversation grows.
+    """
     turns = (history or [])[-settings.history_max_turns_answer:]
-    per_turn = settings.history_max_chars_answer // max(len(turns), 1)
-    return [{"role": t["role"], "content": t["content"][:max(per_turn, 500)]}
+    per_turn = max(500, settings.history_max_chars_answer
+                   // settings.history_max_turns_answer)
+    return [{"role": t["role"], "content": t["content"][:per_turn]}
             for t in turns]
 
 
