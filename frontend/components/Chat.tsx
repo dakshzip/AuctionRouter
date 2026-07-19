@@ -34,8 +34,10 @@ function reasoningSnippet(raw: string): string {
   return s.trim().split(/\s+/).slice(0, 8).join(" ");
 }
 
-// Shown while the boss thinks silently; real reasoning deltas replace them
+// Shown while the boss thinks silently; real reasoning deltas replace
+// them. Index 0 is always the opener.
 const BOSS_THOUGHTS = [
+  "someone called the boss??",
   "reasoning…",
   "forming dependencies…",
   "consulting ancient tomes…",
@@ -114,6 +116,7 @@ export function Chat({
   const bossThinking = !!live?.escalating && !live.text;
   useEffect(() => {
     if (!bossThinking) return;
+    setTick(0); // every boss fight opens on BOSS_THOUGHTS[0]
     const id = setInterval(() => setTick((t) => t + 1), 2200);
     return () => clearInterval(id);
   }, [bossThinking]);
