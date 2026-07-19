@@ -66,7 +66,7 @@ async def query_stream(req: QueryRequest):
 
     async def gen():
         try:
-            async for event in run_query_stream(req.query, history):
+            async for event in run_query_stream(req.query, history, req.hint):
                 yield json.dumps(event) + "\n"
         except Exception as e:  # surface pipeline crashes to the client
             yield json.dumps({"type": "error", "message": str(e)[:300]}) + "\n"

@@ -14,6 +14,9 @@ class ChatTurn(BaseModel):
 class QueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=8000)
     history: list[ChatTurn] = Field(default=[], max_length=20)
+    # User's topic toggle: which model hedges a speculative draft during
+    # bidding (see SPECULATIVE_HINT_MODELS)
+    hint: Literal["general", "coding", "reasoning"] = "general"
 
 
 class Bid(BaseModel):

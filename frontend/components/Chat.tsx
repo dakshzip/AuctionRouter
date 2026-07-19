@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { streamQuery } from "@/lib/api";
+import { streamQuery, type QueryHint } from "@/lib/api";
 import type { ChatTurn, RunResult } from "@/lib/types";
 import { Badge } from "./ui";
 import { Markdown } from "./Markdown";
@@ -68,6 +68,7 @@ export function Chat({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [live, setLive] = useState<LiveState | null>(null);
+  const [hint, setHint] = useState<QueryHint>("general");
   const [tick, setTick] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -104,7 +105,7 @@ export function Chat({
     });
     scroll();
     try {
-      await streamQuery(query, history, (ev) => {
+      await streamQuery(query, history, hint, (ev) => {
         switch (ev.type) {
           case "stage":
             if (ev.stage === "bidding")
@@ -262,7 +263,32 @@ export function Chat({
         <div ref={bottomRef} />
       </div>
 
-      <div className="mt-4 flex gap-3">
+      <div className="mt-3 flex items-center gap-1.5">
+        <span className="mr-1 font-[family-name:var(--font-pixel)] text-[7px] uppercase text-stone-600">
+          topic
+        </span>
+        {(
+          [
+            ["general", "general"],
+            ["coding", "coding"],
+            ["reasoning", "logic/math"],
+          ] as [QueryHint, string][]
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => setHint(value)}
+            className={`border px-2 py-0.5 font-[family-name:var(--font-pixel)] text-[7px] uppercase ${
+              hint === value
+                ? "border-orange-500 bg-orange-950 text-orange-400"
+                : "border-stone-700 bg-stone-950 text-stone-500 hover:border-stone-500 hover:text-stone-300"
+            }`}
+            title="picks which model pre-drafts your answer during the auction"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-3">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}

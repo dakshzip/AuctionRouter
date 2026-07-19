@@ -74,6 +74,14 @@ TIER1_MODELS: dict[str, ModelSpec] = {
     ),
 }
 
+# Topic toggle -> which tier-1 model drafts speculatively during bidding.
+# If the auction then picks that model, its draft is already in flight.
+SPECULATIVE_HINT_MODELS: dict[str, str] = {
+    "general": "gemini",
+    "coding": "qwen",
+    "reasoning": "deepseek",
+}
+
 # --- Verifier ---------------------------------------------------------------
 VERIFIER_MODEL = ModelSpec(
     key="verifier",

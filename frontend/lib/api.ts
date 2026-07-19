@@ -41,16 +41,19 @@ export interface StreamEvent {
   run?: RunResult;
 }
 
+export type QueryHint = "general" | "coding" | "reasoning";
+
 // POST + NDJSON reader (EventSource is GET-only)
 export async function streamQuery(
   query: string,
   history: ChatTurn[],
+  hint: QueryHint,
   onEvent: (ev: StreamEvent) => void,
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/api/query/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, history }),
+    body: JSON.stringify({ query, history, hint }),
   });
   if (!res.ok || !res.body) {
     const body = await res.text().catch(() => "");

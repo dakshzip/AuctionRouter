@@ -19,7 +19,8 @@ from typing import Optional, TypedDict
 from langgraph.graph import END, StateGraph
 
 from . import prompts
-from .config import BASELINE_MODEL, TIER1_MODELS, TIER2_MODEL, VERIFIER_MODEL, settings
+from .config import (BASELINE_MODEL, SPECULATIVE_HINT_MODELS, TIER1_MODELS,
+                     TIER2_MODEL, VERIFIER_MODEL, settings)
 from .llm import LLMError, chat, extract_json
 from .schemas import Bid, RunResult, Usage, Verification
 from .store import get_store
@@ -472,7 +473,8 @@ async def run_query(query: str, history: list[dict] | None = None) -> RunResult:
     return run
 
 
-async def run_query_stream(query: str, history: list[dict] | None = None):
+async def run_query_stream(query: str, history: list[dict] | None = None,
+                           hint: str = "general"):
     """Streaming twin of the LangGraph pipeline.
 
     Reuses the same node functions but drives them imperatively so token
@@ -485,6 +487,22 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
     state: dict = {"query": query, "history": _trim_history(history),
                    "usages": [], "escalated": False}
 
+    # Hedge: the hint's model starts drafting at t=0, in parallel with the
+    # bids. If the auction then picks it (the common case for a matching
+    # hint), the draft is already in flight; otherwise the task is
+    # cancelled for ~a tenth of a cent of wasted cheap-model tokens.
+    hedge_key = SPECULATIVE_HINT_MODELS.get(hint, "gemini")
+    hedge_spec = TIER1_MODELS[hedge_key]
+
+    async def _hedge_draft():
+        try:
+            return await chat(hedge_spec, prompts.ANSWER_SYSTEM, query,
+                              history=state["history"], prefer_paid=True)
+        except Exception:
+            return None
+
+    hedge_task = asyncio.create_task(_hedge_draft())
+
     yield {"type": "stage", "stage": "bidding"}
     state.update(await bid_collection(state))
     state.update(await auction(state))
@@ -495,6 +513,26 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
         "escalated": state.get("escalated", False),
         "reason": state.get("escalation_reason"),
     }
+
+    if (state.get("escalated") or state.get("winner") != hedge_key
+            or state.get("draft_answer")):
+        # Escalating, another model won, or the winning bid already
+        # carried its own answer — the hedge isn't needed
+        hedge_task.cancel()
+    else:
+        resp = await hedge_task
+        if resp is not None and resp.content.strip():
+            state["draft_answer"] = resp.content
+            state["usages"] = state["usages"] + [Usage(
+                model_key=hedge_spec.key, model_name=hedge_spec.display_name,
+                stage="draft", tokens_in=resp.tokens_in,
+                tokens_out=resp.tokens_out,
+                cost_usd=hedge_spec.estimate_cost(resp.tokens_in,
+                                                  resp.tokens_out,
+                                                  resp.served_model),
+                latency_ms=resp.latency_ms,
+            )]
+        # On hedge failure fall through: the normal draft stage runs
 
     if not state.get("escalated"):
         spec = TIER1_MODELS[state["winner"]]
