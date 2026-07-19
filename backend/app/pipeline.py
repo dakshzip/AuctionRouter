@@ -553,11 +553,8 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                    "model": spec.display_name, "speculative": True}
             verify_task = asyncio.create_task(verify(state))
             yield {"type": "stage", "stage": "verifying"}
-            text = state["draft_answer"]
-            step = 240
-            for i in range(0, len(text), step):
-                yield {"type": "token", "text": text[i:i + step]}
-                await asyncio.sleep(0.01)
+            # One event; the client's typewriter animation does the pacing
+            yield {"type": "token", "text": state["draft_answer"]}
             state.update(await verify_task)
         else:
             yield {"type": "stage", "stage": "drafting", "model": spec.display_name}

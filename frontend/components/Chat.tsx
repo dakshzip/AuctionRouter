@@ -71,6 +71,27 @@ export function Chat({
   const [hint, setHint] = useState<QueryHint>("general");
   const [tick, setTick] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Streamed text lands here and is animated out at a steady rate —
+  // network chunks are bursty; the typewriter effect is client-side
+  const pendingRef = useRef("");
+
+  const streaming = live !== null;
+  useEffect(() => {
+    if (!streaming) {
+      pendingRef.current = "";
+      return;
+    }
+    const id = setInterval(() => {
+      const buf = pendingRef.current;
+      if (!buf) return;
+      // Drain faster the further behind we are, so display never lags
+      // the real stream by more than ~half a second
+      const n = Math.min(60, Math.max(2, Math.ceil(buf.length / 25)));
+      pendingRef.current = buf.slice(n);
+      setLive((l) => l && { ...l, text: l.text + buf.slice(0, n) });
+    }, 16);
+    return () => clearInterval(id);
+  }, [streaming]);
 
   // Rotate the boss-thought phrases while GPT-5 thinks silently
   const bossThinking = !!live?.escalating && !live.text;
@@ -120,8 +141,9 @@ export function Chat({
               setLive((l) =>
                 l && { ...l, status: `✓ VERIFIED — ${ev.model}`, provisional: false },
               );
-            else if (ev.stage === "escalating")
+            else if (ev.stage === "escalating") {
               // frontier rewrites from scratch: clear the failed draft
+              pendingRef.current = "";
               setLive((l) => l && {
                 status: `⚔ BOSS FIGHT: ${ev.model}…`,
                 text: "",
@@ -129,9 +151,10 @@ export function Chat({
                 provisional: false,
                 thinking: "",
               });
+            }
             break;
           case "token":
-            setLive((l) => l && { ...l, text: l.text + (ev.text ?? "") });
+            pendingRef.current += ev.text ?? "";
             break;
           case "reasoning":
             setLive((l) =>
