@@ -91,20 +91,6 @@ VERIFIER_MODEL = ModelSpec(
     cost_per_mtok_out=0.17,
 )
 
-# --- Tier 2: frontier escalation target -------------------------------------
-TIER2_MODEL = ModelSpec(
-    key="frontier",
-    openrouter_id="openai/gpt-5",
-    display_name="GPT-5",
-    cost_per_mtok_in=1.25,
-    cost_per_mtok_out=10.00,
-)
-
-# Baseline used for "cost saved" metrics: what the query would have cost if
-# every request went straight to the frontier model.
-BASELINE_MODEL = TIER2_MODEL
-
-
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -191,5 +177,33 @@ class Settings(BaseSettings):
     # spending 8s of chain-of-thought on a greeting
     verifier_reasoning_effort: str = "low"
 
+    # Frontier (tier-2) model, overridable via FRONTIER_MODEL_ID — evals
+    # swap in a big-but-cheap open model to avoid GPT-5 bills
+    frontier_model_id: str = "openai/gpt-5"
+
 
 settings = Settings()
+
+
+# --- Tier 2: frontier escalation target -------------------------------------
+# (display name, $/Mtok in, $/Mtok out) per known frontier choice; unknown
+# ids fall back to GPT-5 pricing so cost metrics stay conservative
+_FRONTIER_SPECS: dict[str, tuple[str, float, float]] = {
+    "openai/gpt-5": ("GPT-5", 1.25, 10.00),
+    "deepseek/deepseek-r1": ("DeepSeek R1", 0.50, 2.15),
+    "meta-llama/llama-4-maverick": ("Llama 4 Maverick", 0.15, 0.60),
+    "qwen/qwen3-235b-a22b": ("Qwen3 235B", 0.20, 0.60),
+}
+_name, _cin, _cout = _FRONTIER_SPECS.get(
+    settings.frontier_model_id, (settings.frontier_model_id, 1.25, 10.00))
+TIER2_MODEL = ModelSpec(
+    key="frontier",
+    openrouter_id=settings.frontier_model_id,
+    display_name=_name,
+    cost_per_mtok_in=_cin,
+    cost_per_mtok_out=_cout,
+)
+
+# Baseline used for "cost saved" metrics: what the query would have cost if
+# every request went straight to the frontier model.
+BASELINE_MODEL = TIER2_MODEL
