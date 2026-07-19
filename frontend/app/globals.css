@@ -160,7 +160,13 @@ body {
   background: var(--accent);
 }
 
-/* Syntax highlighting (rehype-highlight) — retro palette, no stock theme */
+/* Syntax highlighting (rehype-highlight) — CRT phosphor palette:
+   distinct hues per token class, not just orange shades */
+.md-body pre code {
+  color: #d6d3d1; /* neutral base inside blocks; tokens colorize below */
+  background: transparent;
+  padding: 0;
+}
 .hljs-comment,
 .hljs-quote {
   color: #78716c;
@@ -168,30 +174,30 @@ body {
 }
 .hljs-keyword,
 .hljs-selector-tag,
-.hljs-literal,
 .hljs-doctag {
-  color: #fb923c;
+  color: #fb923c; /* orange — the signature accent */
 }
 .hljs-string,
 .hljs-regexp,
 .hljs-addition {
-  color: #fbbf24;
+  color: #4ade80; /* phosphor green */
 }
 .hljs-number,
 .hljs-symbol,
-.hljs-bullet {
-  color: #fdba74;
+.hljs-bullet,
+.hljs-literal {
+  color: #facc15; /* amber terminal yellow */
 }
 .hljs-title,
 .hljs-title.function_,
 .hljs-title.class_,
 .hljs-section {
-  color: #fed7aa;
+  color: #22d3ee; /* cyan */
 }
 .hljs-built_in,
 .hljs-type,
 .hljs-class {
-  color: #f59e0b;
+  color: #c084fc; /* magenta-purple */
 }
 .hljs-attr,
 .hljs-attribute,
