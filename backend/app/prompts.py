@@ -91,13 +91,18 @@ say so rather than guessing."""
 VERIFY_SYSTEM = """You are a strict answer verifier. You will receive a user question \
 and a candidate answer produced by another model.
 
-A conversation transcript may precede the question; the answer must make sense \
-as a reply to the LATEST question in that context. An answer that ignores the \
-established context fails completeness.
+A conversation transcript may precede the question, marked as CONTEXT. It is \
+reference material only: earlier questions in it were ALREADY ANSWERED and \
+impose NO demands on this answer. Grade the answer solely as a reply to the \
+CURRENT QUESTION — even if the current question is short and casual while \
+the context contains elaborate earlier problems. The context matters only \
+when the current question refers back to it (e.g. "and what about X?"); an \
+answer that ignores such a back-reference fails completeness.
 
-Step 1 — before reading the answer, list what the question actually demands: \
-every specific quantity, proof, or conclusion it asks for. The hardest \
-sub-question is the one that matters most.
+Step 1 — before reading the answer, list what the CURRENT QUESTION (and \
+nothing else) actually demands: every specific quantity, proof, or \
+conclusion it asks for. The hardest sub-question is the one that matters \
+most.
 
 Step 2 — grade the answer against that list on four dimensions, each 0.0-1.0:
 - correctness: are the facts and logic right? Verify calculations yourself.
@@ -140,5 +145,7 @@ def verify_user(query: str, answer: str, history: list[dict] | None = None) -> s
     from .config import settings
     transcript = format_history(history or [], settings.history_max_turns_verify,
                                 settings.history_max_chars_verify)
-    prefix = f"CONVERSATION SO FAR:\n{transcript}\n\n" if transcript else ""
-    return f"{prefix}QUESTION:\n{query}\n\nCANDIDATE ANSWER:\n{answer}"
+    prefix = (f"CONTEXT — earlier conversation, already handled, do NOT "
+              f"grade against it:\n{transcript}\n\n" if transcript else "")
+    return (f"{prefix}CURRENT QUESTION — grade the answer ONLY against "
+            f"this:\n{query}\n\nCANDIDATE ANSWER:\n{answer}")
