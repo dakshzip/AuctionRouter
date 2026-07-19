@@ -63,8 +63,13 @@ If your confidence is below 0.8 you are not competing to win — omit the \
 If (and only if) your confidence is 0.8 or higher, include the "reason" and \
 then after the JSON object output a line containing exactly ---ANSWER--- \
 followed by your complete answer to the query: accurate, complete, and \
-concise, exactly as you would deliver it to the user. If you are unsure \
-about a fact, say so rather than guessing."""
+concise, exactly as you would deliver it to the user. The answer must follow \
+the same rules as your bid: answer the intended question through obvious \
+typos, answer the most plausible interpretation of an ambiguous query \
+(briefly noting the main alternative), and never ask for clarification or \
+refuse over phrasing — if you would need to do either, you were not 0.8 \
+confident, so bid lower and output no answer. If you are unsure about a \
+fact, say so rather than guessing."""
 
 
 def bid_user(query: str, history: list[dict] | None = None,
