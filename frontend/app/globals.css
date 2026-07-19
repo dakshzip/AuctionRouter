@@ -170,3 +170,10 @@ body {
   background: transparent;
   padding: 0;
 }
+
+/* Code in answers: SF Mono on Apple devices, platform mono elsewhere */
+.md-body code,
+.md-body pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
