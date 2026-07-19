@@ -131,9 +131,18 @@ async def bid_collection(state: RouterState) -> RouterState:
             break
         done, pending = await asyncio.wait(
             pending, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+        finished = [b for b, _ in (t.result() for t in done)]
+        # A confident hint-model bid decides the auction outright
+        # (hint-priority routing) — stragglers can't change the outcome,
+        # so don't wait for them at all
+        hint_key = state.get("hint_model")
+        if any(b.error is None and b.model_key == hint_key
+               and b.confidence >= settings.hint_priority_confidence
+               for b in finished):
+            break
         confident = any(
             b.error is None and b.confidence >= settings.min_auction_confidence
-            for b, _ in (t.result() for t in done))
+            for b in finished)
         if confident:
             deadline = min(deadline,
                            time.monotonic() + settings.bid_grace_s)
@@ -150,9 +159,11 @@ async def bid_collection(state: RouterState) -> RouterState:
             spec = TIER1_MODELS[key]
             hist = accuracy.get(key, settings.default_historical_accuracy)
             results.append((Bid(model_key=key, model_name=spec.display_name,
-                                confidence=0.0, reason="bid timed out (soft)",
+                                confidence=0.0,
+                                reason="skipped — auction proceeded without waiting",
                                 historical_accuracy=hist,
-                                error="cancelled: soft bid timeout"), None))
+                                error="skipped (not a failure): a confident "
+                                      "bid ended the auction early"), None))
         else:
             results.append(task.result())
     bids = [b for b, _ in results]
