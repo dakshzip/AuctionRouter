@@ -119,33 +119,25 @@ async def bid_collection(state: RouterState) -> RouterState:
         for key in TIER1_MODELS
     }
 
-    # Don't hold the auction for stragglers: once a confident bid lands,
-    # the rest get bid_grace_s more, then they're cancelled and recorded
-    # as timed-out bids.
+    # Wait for every bidder (up to the hard timeout) — cutting stragglers
+    # short saved seconds but cost escalations: a slow specialist's 0.95
+    # bid is worth more than the wait. The one exception: a confident
+    # hint-model bid decides the auction outright (hint-priority
+    # routing), so stragglers can't change that outcome and aren't
+    # waited for.
     hard_deadline = time.monotonic() + settings.bid_timeout_s
-    deadline = hard_deadline
     pending = set(tasks.values())
+    hint_key = state.get("hint_model")
     while pending:
-        timeout = deadline - time.monotonic()
+        timeout = hard_deadline - time.monotonic()
         if timeout <= 0:
             break
         done, pending = await asyncio.wait(
             pending, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
-        finished = [b for b, _ in (t.result() for t in done)]
-        # A confident hint-model bid decides the auction outright
-        # (hint-priority routing) — stragglers can't change the outcome,
-        # so don't wait for them at all
-        hint_key = state.get("hint_model")
         if any(b.error is None and b.model_key == hint_key
                and b.confidence >= settings.hint_priority_confidence
-               for b in finished):
+               for b, _ in (t.result() for t in done)):
             break
-        confident = any(
-            b.error is None and b.confidence >= settings.min_auction_confidence
-            for b in finished)
-        if confident:
-            deadline = min(deadline,
-                           time.monotonic() + settings.bid_grace_s)
     for t in pending:
         t.cancel()
 

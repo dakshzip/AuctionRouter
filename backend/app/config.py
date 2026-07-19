@@ -137,9 +137,6 @@ class Settings(BaseSettings):
 
     request_timeout_s: float = 60.0
     bid_timeout_s: float = 20.0
-    # Once a confident bid is in hand, stragglers get this much longer
-    # before the auction proceeds without them
-    bid_grace_s: float = 2.0
 
     # Bidders at or above this confidence append a speculative answer to
     # their bid, letting the pipeline skip the separate draft round-trip
