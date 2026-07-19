@@ -58,7 +58,7 @@ function CopyButton({ text }: { text: string }) {
           setTimeout(() => setCopied(false), 1500);
         });
       }}
-      className={`ml-auto border px-1.5 font-[family-name:var(--font-pixel)] text-[7px] uppercase leading-4 ${
+      className={`ml-auto border px-1.5 font-[family-name:var(--font-pixel)] text-[10px] uppercase leading-4 ${
         copied
           ? "border-green-600 text-green-400"
           : "border-stone-600 text-stone-500 hover:border-orange-500 hover:text-orange-400"
@@ -305,11 +305,11 @@ export function Chat({
                 live.escalating ? "bg-orange-950/20" : ""
               }`}
             >
-              <div className="mb-1.5 flex items-center gap-2 font-[family-name:var(--font-pixel)] text-[8px] text-orange-400">
+              <div className="mb-1.5 flex items-center gap-2 font-[family-name:var(--font-pixel)] text-[10px] text-orange-400">
                 <span className="blink">▓</span>
                 {live.status}
                 {live.provisional && live.text && (
-                  <span className="border border-amber-700 bg-amber-950/40 px-1 text-[7px] uppercase text-amber-500">
+                  <span className="border border-amber-700 bg-amber-950/40 px-1 text-[10px] uppercase text-amber-500">
                     unverified draft
                   </span>
                 )}
@@ -333,7 +333,7 @@ export function Chat({
       </div>
 
       <div className="mt-3 flex items-center gap-1.5">
-        <span className="mr-1 font-[family-name:var(--font-pixel)] text-[7px] uppercase text-stone-600">
+        <span className="mr-1 font-[family-name:var(--font-pixel)] text-[10px] uppercase text-stone-600">
           topic
         </span>
         {(
@@ -346,7 +346,7 @@ export function Chat({
           <button
             key={value}
             onClick={() => setHint(value)}
-            className={`border px-2 py-0.5 font-[family-name:var(--font-pixel)] text-[7px] uppercase ${
+            className={`border px-2 py-0.5 font-[family-name:var(--font-pixel)] text-[10px] uppercase ${
               hint === value
                 ? "border-orange-500 bg-orange-950 text-orange-400"
                 : "border-stone-700 bg-stone-950 text-stone-500 hover:border-stone-500 hover:text-stone-300"
@@ -374,7 +374,7 @@ export function Chat({
         <button
           onClick={send}
           disabled={!!live || !input.trim()}
-          className="pixel-btn bg-orange-950 px-5 font-[family-name:var(--font-pixel)] text-[10px] uppercase text-orange-400 disabled:cursor-not-allowed disabled:text-stone-600"
+          className="pixel-btn bg-orange-950 px-5 font-[family-name:var(--font-pixel)] text-[12px] uppercase text-orange-400 disabled:cursor-not-allowed disabled:text-stone-600"
         >
           send
         </button>
