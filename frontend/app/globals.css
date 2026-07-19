@@ -21,13 +21,15 @@ body {
   image-rendering: pixelated;
 }
 
-/* CRT scanlines over everything */
+/* CRT scanlines, scoped to whatever element carries .crt */
+.crt {
+  position: relative;
+}
 .crt::after {
   content: "";
-  position: fixed;
+  position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 50;
   background: repeating-linear-gradient(
     0deg,
     rgba(0, 0, 0, 0.22) 0px,

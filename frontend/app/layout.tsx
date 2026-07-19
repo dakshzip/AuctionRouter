@@ -32,7 +32,7 @@ export default function RootLayout({
       lang="en"
       className={`${pixelFont.variable} ${termFont.variable} h-full`}
     >
-      <body className="crt min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
 }

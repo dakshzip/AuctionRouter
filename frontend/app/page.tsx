@@ -20,7 +20,7 @@ export default function Home() {
   return (
     <div className="mx-auto flex h-screen w-full flex-col px-6 py-4">
       <header className="mb-4 flex items-center justify-between px-1 py-2">
-        <h1 className="font-[family-name:var(--font-pixel)] text-2xl tracking-tight text-stone-200">
+        <h1 className="crt font-[family-name:var(--font-pixel)] text-2xl tracking-tight text-stone-200">
           AUCTION
           <span className="glow-pulse text-orange-500">ROUTER</span>
           <span className="blink text-orange-500">_</span>
