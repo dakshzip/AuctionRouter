@@ -9,6 +9,7 @@ verifier gates the draft; failures escalate to the frontier model.
 """
 
 import asyncio
+import logging
 import re
 import statistics
 import time
@@ -58,16 +59,19 @@ def _split_bid_content(content: str) -> tuple[str, Optional[str]]:
     return json_part, answer or None
 
 
-async def _get_bid(model_key: str, query: str, accuracy: dict[str, float],
+async def _get_bid(model_key: str, query: str,
+                   accuracy_task: "asyncio.Task[dict[str, float]]",
                    chat_history: list[dict]) -> tuple[Bid, Optional[Usage]]:
     spec = TIER1_MODELS[model_key]
-    hist = accuracy.get(model_key, settings.default_historical_accuracy)
     try:
         resp = await chat(spec, prompts.BID_SYSTEM,
                           prompts.bid_user(query, chat_history, spec.specialty),
                           timeout=settings.bid_timeout_s,
                           max_tokens=settings.max_bid_tokens,
                           prefer_paid=True)
+        # The store read ran concurrently with the bid; by now it's done
+        hist = (await accuracy_task).get(
+            model_key, settings.default_historical_accuracy)
         json_part, speculative = _split_bid_content(resp.content)
         data = extract_json(json_part)
         confidence = _clamp(data.get("confidence", 0))
@@ -92,16 +96,24 @@ async def _get_bid(model_key: str, query: str, accuracy: dict[str, float],
         )
         return bid, usage
     except (LLMError, ValueError, asyncio.TimeoutError, Exception) as e:
+        try:
+            hist = (await accuracy_task).get(
+                model_key, settings.default_historical_accuracy)
+        except Exception:
+            hist = settings.default_historical_accuracy
         return Bid(model_key=model_key, model_name=spec.display_name,
                    confidence=0.0, reason="bid failed",
                    historical_accuracy=hist, error=str(e)[:200]), None
 
 
 async def bid_collection(state: RouterState) -> RouterState:
-    accuracy = await get_store().historical_accuracy()
+    # Fired alongside the bids, not before them — with MongoDB this store
+    # read is a network round-trip that shouldn't delay the bid launch
+    accuracy_task = asyncio.ensure_future(get_store().historical_accuracy())
     tasks = {
         key: asyncio.ensure_future(
-            _get_bid(key, state["query"], accuracy, state.get("history", [])))
+            _get_bid(key, state["query"], accuracy_task,
+                     state.get("history", [])))
         for key in TIER1_MODELS
     }
 
@@ -126,6 +138,10 @@ async def bid_collection(state: RouterState) -> RouterState:
     for t in pending:
         t.cancel()
 
+    try:
+        accuracy = await accuracy_task
+    except Exception:
+        accuracy = {}
     results = []
     for key, task in tasks.items():
         if task in pending:
@@ -420,6 +436,24 @@ def _make_run(query: str, final: dict, start: float) -> RunResult:
     )
 
 
+# Fire-and-forget run persistence: the client shouldn't wait on a Mongo
+# write it never reads. Strong refs keep tasks from being GC'd mid-flight.
+_save_tasks: set[asyncio.Task] = set()
+
+
+def _save_run_bg(run: RunResult) -> None:
+    task = asyncio.ensure_future(get_store().save_run(run))
+    _save_tasks.add(task)
+
+    def _done(t: asyncio.Task) -> None:
+        _save_tasks.discard(t)
+        if not t.cancelled() and t.exception() is not None:
+            logging.getLogger(__name__).warning(
+                "save_run failed for %s: %s", run.id, t.exception())
+
+    task.add_done_callback(_done)
+
+
 def _trim_history(history: list[dict] | None) -> list[dict]:
     """Answer-level cap: most recent turns, per-turn char truncation."""
     turns = (history or [])[-settings.history_max_turns_answer:]
@@ -434,7 +468,7 @@ async def run_query(query: str, history: list[dict] | None = None) -> RunResult:
                           "usages": [], "escalated": False}
     final = await get_graph().ainvoke(state)
     run = _make_run(query, final, start)
-    await get_store().save_run(run)
+    _save_run_bg(run)
     return run
 
 
@@ -567,5 +601,5 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
         state.update(await finalize(state))
 
     run = _make_run(query, state, start)
-    await get_store().save_run(run)
+    _save_run_bg(run)
     yield {"type": "done", "run": run.model_dump(mode="json")}
