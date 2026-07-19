@@ -368,7 +368,7 @@ export function Chat({
             }
           }}
           rows={2}
-          placeholder="> type your query…"
+          placeholder="> type your query… (phd level stem questions trigger frontier)"
           className="flex-1 resize-none border-2 border-stone-700 bg-black px-3 py-2 text-stone-200 outline-none placeholder:text-stone-600 focus:border-orange-500"
         />
         <button
