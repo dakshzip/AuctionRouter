@@ -59,8 +59,7 @@ TIER1_MODELS: dict[str, ModelSpec] = {
         cost_per_mtok_in=0.20,
         cost_per_mtok_out=0.80,
         specialty="strongest at mathematical reasoning, logic puzzles, and "
-                  "quantitative problems; solid at code; average at niche "
-                  "world knowledge",
+                  "quantitative problems",
     ),
     "qwen": ModelSpec(
         key="qwen",

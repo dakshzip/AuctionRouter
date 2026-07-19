@@ -44,11 +44,14 @@ Respond with a JSON object first:
  "estimated_difficulty": <0.0-1.0, how hard this query is for any model>,
  "reason": "<one short sentence explaining your bid>"}
 
-If (and only if) your confidence is 0.8 or higher, then after the JSON object \
-output a line containing exactly ---ANSWER--- followed by your complete answer \
-to the query: accurate, complete, and concise, exactly as you would deliver it \
-to the user. If you are unsure about a fact, say so rather than guessing. If \
-your confidence is below 0.8, output ONLY the JSON object."""
+If your confidence is below 0.8 you are not competing to win — omit the \
+"reason" field, output just the two numbers, and stop.
+
+If (and only if) your confidence is 0.8 or higher, include the "reason" and \
+then after the JSON object output a line containing exactly ---ANSWER--- \
+followed by your complete answer to the query: accurate, complete, and \
+concise, exactly as you would deliver it to the user. If you are unsure \
+about a fact, say so rather than guessing."""
 
 
 def bid_user(query: str, history: list[dict] | None = None,
@@ -69,10 +72,8 @@ rather than guessing."""
 
 # Escalated queries are the hard ones — the frontier model should show its
 # work rather than compress
-FRONTIER_SYSTEM = """You are an expert assistant handling a question that \
-smaller models could not answer reliably. Give a well-structured answer: \
-show the key reasoning steps compactly, state the final result clearly, and \
-note any assumptions. Be as complete as correctness demands and no longer — \
+FRONTIER_SYSTEM = """You are an expert assistant,Give a well-structured answer: \
+show the key reasoning steps compactly, state the final result clearly. Be as complete as correctness demands and no longer — \
 skip preamble, restatement of the question, and padding. If you are unsure \
 about a fact, say so rather than guessing."""
 
