@@ -84,10 +84,10 @@ export function Chat({
     const id = setInterval(() => {
       const buf = pendingRef.current;
       if (!buf) return;
-      // Typewriter pace: ~60 chars/s floor so short answers feel typed,
-      // scaling up just enough that even a full buffered draft finishes
-      // in a few seconds (first chars still render on the next frame)
-      const n = Math.min(24, Math.max(1, Math.ceil(buf.length / 150)));
+      // Deliberately slow typewriter (~60 chars/s floor, ~370/s ceiling):
+      // tokens arrive early via the hedge stream, so the pacing exists to
+      // be read, not to catch up (first chars still render next frame)
+      const n = Math.min(6, Math.max(1, Math.ceil(buf.length / 400)));
       pendingRef.current = buf.slice(n);
       setLive((l) => l && { ...l, text: l.text + buf.slice(0, n) });
     }, 16);
@@ -122,7 +122,8 @@ export function Chat({
       status: "⚡ AUCTION IN PROGRESS…",
       text: "",
       escalating: false,
-      provisional: false,
+      // Hedge tokens stream during the auction, before any verdict
+      provisional: true,
       thinking: "",
     });
     scroll();
@@ -156,6 +157,11 @@ export function Chat({
             break;
           case "token":
             pendingRef.current += ev.text ?? "";
+            break;
+          case "reset":
+            // The streamed provisional draft lost the auction — clear it
+            pendingRef.current = "";
+            setLive((l) => l && { ...l, text: "" });
             break;
           case "reasoning":
             setLive((l) =>

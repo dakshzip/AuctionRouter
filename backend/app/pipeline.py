@@ -511,24 +511,46 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                    "usages": [], "escalated": False}
 
     # Hedge: the hint's model starts drafting at t=0, in parallel with the
-    # bids. If the auction then picks it (the common case for a matching
-    # hint), the draft is already in flight; otherwise the task is
-    # cancelled for ~a tenth of a cent of wasted cheap-model tokens.
+    # bids, and its tokens stream to the client IMMEDIATELY — hint-priority
+    # routing means this model usually wins, so the provisional text is
+    # usually final. If another model wins, a "reset" event clears it.
     hedge_key = SPECULATIVE_HINT_MODELS.get(hint, "gemini")
     hedge_spec = TIER1_MODELS[hedge_key]
     state["hint_model"] = hedge_key
 
-    async def _hedge_draft():
-        try:
-            return await chat(hedge_spec, prompts.ANSWER_SYSTEM, query,
-                              history=state["history"], prefer_paid=True)
-        except Exception:
-            return None
+    hedge_q: asyncio.Queue = asyncio.Queue()
 
-    hedge_task = asyncio.create_task(_hedge_draft())
+    async def _hedge_stream():
+        try:
+            resp = None
+            async for ev in chat_stream(hedge_spec, prompts.ANSWER_SYSTEM,
+                                        query, history=state["history"],
+                                        prefer_paid=True):
+                if ev["type"] == "delta":
+                    hedge_q.put_nowait(("delta", ev["text"]))
+                elif ev["type"] == "final":
+                    resp = ev["response"]
+            hedge_q.put_nowait(("final", resp))
+        except Exception:
+            hedge_q.put_nowait(("final", None))
+
+    hedge_task = asyncio.create_task(_hedge_stream())
+    bid_task = asyncio.create_task(bid_collection(state))
 
     yield {"type": "stage", "stage": "bidding"}
-    state.update(await bid_collection(state))
+    # Forward hedge tokens the moment they exist, while bids come in
+    hedge_final: Optional[object] = None
+    hedge_done = False
+    while not bid_task.done():
+        try:
+            kind, val = await asyncio.wait_for(hedge_q.get(), timeout=0.05)
+        except asyncio.TimeoutError:
+            continue
+        if kind == "delta":
+            yield {"type": "token", "text": val}
+        else:
+            hedge_final, hedge_done = val, True
+    state.update(bid_task.result())
     state.update(await auction(state))
     yield {
         "type": "auction",
@@ -538,13 +560,27 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
         "reason": state.get("escalation_reason"),
     }
 
-    if (state.get("escalated") or state.get("winner") != hedge_key
-            or state.get("draft_answer")):
-        # Escalating, another model won, or the winning bid already
-        # carried its own answer — the hedge isn't needed
+    hedge_won = (not state.get("escalated")
+                 and state.get("winner") == hedge_key)
+    if not hedge_won:
+        # Another model won (or we're escalating): drop the hedge and
+        # clear its provisional text on the client
         hedge_task.cancel()
+        yield {"type": "reset"}
+        # A non-hedge winner may still have carried an answer in its bid;
+        # that path (and the normal draft path) resumes below
     else:
-        resp = await hedge_task
+        # Keep streaming the hedge to completion
+        state.pop("draft_answer", None)  # hedge supersedes any bid answer
+        yield {"type": "stage", "stage": "drafting",
+               "model": hedge_spec.display_name, "speculative": True}
+        while not hedge_done:
+            kind, val = await hedge_q.get()
+            if kind == "delta":
+                yield {"type": "token", "text": val}
+            else:
+                hedge_final, hedge_done = val, True
+        resp = hedge_final
         if resp is not None and resp.content.strip():
             state["draft_answer"] = resp.content
             state["usages"] = state["usages"] + [Usage(
@@ -556,14 +592,21 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                                                   resp.served_model),
                 latency_ms=resp.latency_ms,
             )]
-        # On hedge failure fall through: the normal draft stage runs
+            yield {"type": "stage", "stage": "verifying"}
+            state.update(await verify(state))
+        else:
+            # Hedge produced nothing: clear its text and use the normal
+            # draft stage below
+            yield {"type": "reset"}
 
     if not state.get("escalated"):
         spec = TIER1_MODELS[state["winner"]]
         # Streaming-first: draft tokens go to the client as they exist, so
         # the user reads while the verifier judges. A failed verification
         # clears the provisional text via the existing "escalating" stage.
-        if state.get("draft_answer"):
+        if hedge_won and state.get("verification"):
+            pass  # hedge already streamed and verified above
+        elif state.get("draft_answer"):
             # Winner's bid already carried the answer — verify it in
             # parallel while the client renders the draft
             yield {"type": "stage", "stage": "drafting",
@@ -603,18 +646,20 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                 yield {"type": "stage", "stage": "verifying"}
                 state.update(await verify(state))
 
-        if state.get("verification"):
-            yield {
-                "type": "verification",
-                **state["verification"].model_dump(),
-                "escalated": state.get("escalated", False),
-                "reason": state.get("escalation_reason"),
-            }
-        if state.get("draft_answer") and not state.get("escalated"):
-            # Verified: flip the client's provisional badge; tokens were
-            # already streamed live
-            yield {"type": "stage", "stage": "delivering",
-                   "model": spec.display_name}
+    # Verification outcome is reported regardless of which path produced
+    # the draft (hedge, bid speculative, or normal draft stage)
+    if state.get("verification"):
+        yield {
+            "type": "verification",
+            **state["verification"].model_dump(),
+            "escalated": state.get("escalated", False),
+            "reason": state.get("escalation_reason"),
+        }
+    if state.get("draft_answer") and not state.get("escalated"):
+        # Verified: flip the client's provisional badge; tokens were
+        # already streamed live
+        yield {"type": "stage", "stage": "delivering",
+               "model": TIER1_MODELS[state["winner"]].display_name}
 
     if state.get("escalated"):
         effort, max_tokens = _frontier_plan(state)

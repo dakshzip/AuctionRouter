@@ -27,7 +27,7 @@ export function submitQuery(
 }
 
 export interface StreamEvent {
-  type: "stage" | "auction" | "token" | "reasoning" | "verification" | "frontier_failed" | "error" | "done";
+  type: "stage" | "auction" | "token" | "reset" | "reasoning" | "verification" | "frontier_failed" | "error" | "done";
   stage?: "bidding" | "drafting" | "verifying" | "delivering" | "escalating";
   model?: string;
   text?: string;
