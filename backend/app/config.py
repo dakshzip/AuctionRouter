@@ -164,7 +164,10 @@ class Settings(BaseSettings):
     # Frontier headroom: reasoning tokens count against the cap (medium
     # effort thinks longer than low), so don't cut this too far or the
     # answer comes back empty
-    max_frontier_tokens: int = 8000
+    # Escalations are rare now (hint-priority routing + calibrated bids
+    # resolve most queries at tier 1), so the hard ones that do reach
+    # GPT-5 get full thinking headroom
+    max_frontier_tokens: int = 16000
     # Easy escalations think little at low effort, so a smaller cap is
     # safe and bounds the worst-case bill; keep enough headroom that
     # reasoning + answer never hits it (empty-response failure mode)
