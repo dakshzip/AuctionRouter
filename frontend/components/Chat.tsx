@@ -22,6 +22,18 @@ interface LiveState {
   thinking: string;
 }
 
+// Condense raw reasoning into one short headline (GPT reasoning summaries
+// use **bold** section titles; fall back to the latest sentence)
+function reasoningSnippet(raw: string): string {
+  const heads = raw.match(/\*\*([^*\n]{3,80})\*\*/g);
+  let s = heads ? heads[heads.length - 1].replace(/\*\*/g, "") : "";
+  if (!s) {
+    const sentences = raw.replace(/[*#`]/g, "").trim().split(/(?<=[.!?])\s+/);
+    s = sentences[sentences.length - 1] ?? "";
+  }
+  return s.trim().split(/\s+/).slice(0, 8).join(" ");
+}
+
 // Shown while the boss thinks silently; real reasoning deltas replace them
 const BOSS_THOUGHTS = [
   "reasoning…",
@@ -87,26 +99,13 @@ export function Chat({
     }
     const id = setInterval(() => {
       const buf = pendingRef.current;
-      const rbuf = reasoningRef.current;
-      if (!buf && !rbuf) return;
+      if (!buf) return;
       // Deliberately slow typewriter (~60 chars/s floor, ~370/s ceiling):
       // tokens arrive early via the hedge stream, so the pacing exists to
       // be read, not to catch up (first chars still render next frame)
       const n = Math.min(6, Math.max(1, Math.ceil(buf.length / 400)));
-      // Reasoning ticker: strictly reading pace (~60-125 chars/s); the
-      // display only keeps a short tail so it can't overflow
-      const m = Math.min(2, Math.max(1, Math.ceil(rbuf.length / 300)));
-      if (buf) pendingRef.current = buf.slice(n);
-      if (rbuf) reasoningRef.current = rbuf.slice(m);
-      setLive((l) =>
-        l && {
-          ...l,
-          text: buf ? l.text + buf.slice(0, n) : l.text,
-          thinking: rbuf
-            ? (l.thinking + rbuf.slice(0, m)).slice(-140)
-            : l.thinking,
-        },
-      );
+      pendingRef.current = buf.slice(n);
+      setLive((l) => l && { ...l, text: l.text + buf.slice(0, n) });
     }, 16);
     return () => clearInterval(id);
   }, [streaming]);
@@ -117,6 +116,20 @@ export function Chat({
     if (!bossThinking) return;
     const id = setInterval(() => setTick((t) => t + 1), 2200);
     return () => clearInterval(id);
+  }, [bossThinking]);
+
+  // One condensed reasoning headline at a time, swapped every ~7.5s —
+  // raw reasoning streams far too fast to read
+  useEffect(() => {
+    if (!bossThinking) return;
+    const update = () => {
+      const snip = reasoningSnippet(reasoningRef.current);
+      if (snip) setLive((l) => l && { ...l, thinking: snip });
+    };
+    const id = setInterval(update, 7500);
+    return () => {
+      clearInterval(id);
+    };
   }, [bossThinking]);
 
   const scroll = () =>
@@ -182,11 +195,9 @@ export function Chat({
             setLive((l) => l && { ...l, text: "" });
             break;
           case "reasoning":
-            // Cap the backlog: when the model thinks faster than reading
-            // pace, drop the oldest unread reasoning and skip ahead
             reasoningRef.current = (
               reasoningRef.current + (ev.text ?? "")
-            ).slice(-500);
+            ).slice(-4000);
             break;
           case "verification":
             if (!ev.passed)
@@ -296,9 +307,9 @@ export function Chat({
                 )}
               </div>
               {bossThinking && (
-                <div className="line-clamp-2 max-w-full break-words font-mono text-xs italic leading-4 text-stone-500">
+                <div className="max-w-full truncate font-mono text-xs italic text-stone-500">
                   {live.thinking
-                    ? `…${live.thinking.trimStart()}`
+                    ? `${live.thinking}…`
                     : BOSS_THOUGHTS[tick % BOSS_THOUGHTS.length]}
                 </div>
               )}
