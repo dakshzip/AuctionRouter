@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { Pixelify_Sans, VT323 } from "next/font/google";
+import { Chakra_Petch, VT323 } from "next/font/google";
 import "./globals.css";
 
-// Pixelify Sans: pixel DNA but rounded and modern — legible at small
-// sizes where Press Start 2P / Silkscreen read as noise
-const pixelFont = Pixelify_Sans({
+// Chakra Petch: squared-off techno letterforms — retro-futurist attitude
+// without literal pixels, crisp at every size
+const pixelFont = Chakra_Petch({
   variable: "--font-pixel",
   weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
