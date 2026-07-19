@@ -84,9 +84,10 @@ export function Chat({
     const id = setInterval(() => {
       const buf = pendingRef.current;
       if (!buf) return;
-      // Drain faster the further behind we are, so display never lags
-      // the real stream by more than ~half a second
-      const n = Math.min(60, Math.max(2, Math.ceil(buf.length / 25)));
+      // Typewriter pace: ~60 chars/s floor so short answers feel typed,
+      // scaling up just enough that even a full buffered draft finishes
+      // in a few seconds (first chars still render on the next frame)
+      const n = Math.min(24, Math.max(1, Math.ceil(buf.length / 150)));
       pendingRef.current = buf.slice(n);
       setLive((l) => l && { ...l, text: l.text + buf.slice(0, n) });
     }, 16);
