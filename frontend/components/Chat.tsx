@@ -284,7 +284,7 @@ export function Chat({
               )}
               {live.text && (
                 <div className="text-stone-200">
-                  <Markdown>{live.text}</Markdown>
+                  <Markdown highlight={false}>{live.text}</Markdown>
                 </div>
               )}
             </div>

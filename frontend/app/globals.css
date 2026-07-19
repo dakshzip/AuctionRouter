@@ -159,3 +159,54 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
 }
+
+/* Syntax highlighting (rehype-highlight) — retro palette, no stock theme */
+.hljs-comment,
+.hljs-quote {
+  color: #78716c;
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag {
+  color: #fb923c;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: #fbbf24;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: #fdba74;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_,
+.hljs-section {
+  color: #fed7aa;
+}
+.hljs-built_in,
+.hljs-type,
+.hljs-class {
+  color: #f59e0b;
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: #d6d3d1;
+}
+.hljs-meta,
+.hljs-deletion {
+  color: #a8a29e;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: bold;
+}
