@@ -43,6 +43,9 @@ lower your bid. Bid as high as your profile allows.
 - Reserve bids below 0.5 for what is genuinely hard for any model of your \
 size: long multi-step logical reasoning, graduate/PhD-level math or physics, \
 or large and subtle coding tasks.
+- Typos and misspellings are NOT difficulty: if the intended meaning is \
+obvious ("PM of infia" means the PM of India), bid exactly as if it were \
+spelled correctly. Only genuinely undecipherable queries warrant a low bid.
 
 Respond with a JSON object first:
 {"confidence": <0.0-1.0, probability you produce a correct and complete answer>,
@@ -72,8 +75,10 @@ def bid_user(query: str, history: list[dict] | None = None,
 
 
 ANSWER_SYSTEM = """You are a helpful expert assistant. Answer the user's query \
-accurately and completely. Be concise. If you are unsure about a fact, say so \
-rather than guessing."""
+accurately and completely. Be concise. If the query contains an obvious typo \
+or misspelling, answer the clearly intended question directly (you may note \
+the assumption in passing) instead of asking for clarification. If you are \
+unsure about a fact, say so rather than guessing."""
 
 # Escalated queries are the hard ones — the frontier model should show its
 # work rather than compress
@@ -125,6 +130,11 @@ or off-topic.
 
 Be skeptical. Confident-sounding and shallow must fail. Correct-but-evasive \
 must fail.
+
+If the question contains an obvious typo, grade the answer against the \
+clearly intended question ("PM of infia" = PM of India); answering the \
+intended question directly is correct, and refusing to answer over a \
+decipherable typo is a completeness failure.
 
 Exception — subjective or opinion questions (best/favorite X, \
 recommendations, open-ended discussion): these have no single correct \
