@@ -160,59 +160,10 @@ body {
   background: var(--accent);
 }
 
-/* Syntax highlighting (rehype-highlight) — CRT phosphor palette:
-   distinct hues per token class, not just orange shades */
-.md-body pre code {
-  color: #d6d3d1; /* neutral base inside blocks; tokens colorize below */
+/* Code blocks use the stock Atom One Dark theme (imported in
+   Markdown.tsx). Keep our pre's black box: transparent bg, no double
+   padding; the theme supplies the token colors. */
+.md-body pre code.hljs {
   background: transparent;
   padding: 0;
-}
-.hljs-comment,
-.hljs-quote {
-  color: #78716c;
-  font-style: italic;
-}
-.hljs-keyword,
-.hljs-selector-tag,
-.hljs-doctag {
-  color: #fb923c; /* orange — the signature accent */
-}
-.hljs-string,
-.hljs-regexp,
-.hljs-addition {
-  color: #4ade80; /* phosphor green */
-}
-.hljs-number,
-.hljs-symbol,
-.hljs-bullet,
-.hljs-literal {
-  color: #facc15; /* amber terminal yellow */
-}
-.hljs-title,
-.hljs-title.function_,
-.hljs-title.class_,
-.hljs-section {
-  color: #22d3ee; /* cyan */
-}
-.hljs-built_in,
-.hljs-type,
-.hljs-class {
-  color: #c084fc; /* magenta-purple */
-}
-.hljs-attr,
-.hljs-attribute,
-.hljs-variable,
-.hljs-template-variable,
-.hljs-params {
-  color: #d6d3d1;
-}
-.hljs-meta,
-.hljs-deletion {
-  color: #a8a29e;
-}
-.hljs-emphasis {
-  font-style: italic;
-}
-.hljs-strong {
-  font-weight: bold;
 }

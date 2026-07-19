@@ -6,6 +6,8 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import "katex/dist/katex.min.css";
+// Same scheme ChatGPT uses for code blocks
+import "highlight.js/styles/atom-one-dark.min.css";
 
 // LLMs emit LaTeX as \(...\) / \[...\] but remark-math only parses $...$ /
 // $$...$$, so normalize before rendering.
