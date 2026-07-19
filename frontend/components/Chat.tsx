@@ -255,7 +255,7 @@ export function Chat({
         {messages.map((msg, i) =>
           msg.role === "user" ? (
             <div key={i} className="flex justify-end">
-              <div className="max-w-[85%] bg-orange-950/60 px-3 py-2 text-orange-100">
+              <div className="max-w-[65%] bg-orange-950/60 px-3 py-2 text-orange-100">
                 <span className="mr-1 text-orange-500">&gt;</span>
                 {msg.text}
               </div>
@@ -271,7 +271,7 @@ export function Chat({
             <div key={i} className="flex justify-start">
               <div
                 onClick={() => msg.run && onSelectRun(msg.run)}
-                className={`max-w-[85%] cursor-pointer select-text px-3 py-2 text-left ${
+                className={`max-w-[97%] cursor-pointer select-text px-3 py-2 text-left ${
                   msg.run && msg.run.id === selectedRunId
                     ? "bg-stone-800"
                     : "bg-stone-950 hover:bg-stone-900"
@@ -298,7 +298,7 @@ export function Chat({
         {live && (
           <div className="flex justify-start">
             <div
-              className={`max-w-[85%] px-3 py-2 ${
+              className={`max-w-[97%] px-3 py-2 ${
                 live.escalating ? "bg-orange-950/20" : "bg-stone-950"
               }`}
             >
