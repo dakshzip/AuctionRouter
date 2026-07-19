@@ -56,7 +56,10 @@ export default function Home() {
               setRunCount((c) => c + 1);
             }}
             selectedRunId={selectedRun?.id ?? null}
-            onSelectRun={setSelectedRun}
+            onSelectRun={(run) => {
+              setSelectedRun(run);
+              setSideOpen(true); // inspecting a run implies wanting the panels
+            }}
           />
         </section>
         {/* One-arrow toggle for the routing/auction/verification sidebar */}
