@@ -52,7 +52,7 @@ export default function Home() {
       {/* Both tabs stay mounted (hidden via CSS) so the chat conversation
           and any in-flight query survive switching to metrics and back */}
       <div
-        className={`min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_440px] ${
+        className={`min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_360px] ${
           tab === "chat" ? "grid" : "hidden"
         }`}
       >
