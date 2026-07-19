@@ -17,7 +17,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-term), monospace;
-  font-size: 22px;
+  font-size: 24px;
   image-rendering: pixelated;
 }
 
