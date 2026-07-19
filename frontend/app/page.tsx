@@ -15,23 +15,16 @@ export default function Home() {
   const [tab, setTab] = useState<Tab>("chat");
   const [selectedRun, setSelectedRun] = useState<RunResult | null>(null);
   const [runCount, setRunCount] = useState(0);
+  const [sideOpen, setSideOpen] = useState(false);
 
   return (
     <div className="mx-auto flex h-screen w-full flex-col px-6 py-4">
-      <header className="dither glow-border mb-4 flex items-center justify-between border-2 border-orange-900 bg-[#0a0806] px-6 py-5">
-        <div>
-          <h1 className="font-[family-name:var(--font-pixel)] text-2xl tracking-tight text-stone-200">
-            AUCTION
-            <span className="glow-pulse text-orange-500">ROUTER</span>
-            <span className="blink text-orange-500">_</span>
-          </h1>
-          <p className="mt-2 text-base leading-none text-stone-500">
-            cheap models bid → winner drafts → verifier judges → bosses escalate
-          </p>
-          <p className="mt-1.5 font-[family-name:var(--font-pixel)] text-[9px] uppercase leading-none text-orange-500/80">
-            stop paying frontier prices for every query
-          </p>
-        </div>
+      <header className="mb-4 flex items-center justify-between px-1 py-2">
+        <h1 className="font-[family-name:var(--font-pixel)] text-2xl tracking-tight text-stone-200">
+          AUCTION
+          <span className="glow-pulse text-orange-500">ROUTER</span>
+          <span className="blink text-orange-500">_</span>
+        </h1>
         <nav className="flex gap-2">
           {(["chat", "metrics"] as Tab[]).map((t) => (
             <button
@@ -52,11 +45,11 @@ export default function Home() {
       {/* Both tabs stay mounted (hidden via CSS) so the chat conversation
           and any in-flight query survive switching to metrics and back */}
       <div
-        className={`min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_360px] ${
-          tab === "chat" ? "grid" : "hidden"
+        className={`min-h-0 flex-1 gap-2 ${
+          tab === "chat" ? "flex" : "hidden"
         }`}
       >
-        <section className="pixel-panel min-h-0 p-4">
+        <section className="min-h-0 min-w-0 flex-1">
           <Chat
             onRun={(run) => {
               setSelectedRun(run);
@@ -66,17 +59,27 @@ export default function Home() {
             onSelectRun={setSelectedRun}
           />
         </section>
-        <aside className="min-h-0 space-y-4 overflow-y-auto pb-2 pr-2">
-          {selectedRun ? (
-            <>
-              <RoutingGraph run={selectedRun} />
-              <AuctionPanel run={selectedRun} />
-              <VerificationPanel run={selectedRun} />
-            </>
-          ) : (
-            <BidArcade />
-          )}
-        </aside>
+        {/* One-arrow toggle for the routing/auction/verification sidebar */}
+        <button
+          onClick={() => setSideOpen((o) => !o)}
+          title={sideOpen ? "hide run details" : "show run details"}
+          className="flex w-6 shrink-0 items-center justify-center border-2 border-stone-800 bg-stone-950 font-[family-name:var(--font-pixel)] text-[10px] text-stone-500 hover:border-stone-600 hover:text-orange-400"
+        >
+          {sideOpen ? "▶" : "◀"}
+        </button>
+        {sideOpen && (
+          <aside className="min-h-0 w-[360px] shrink-0 space-y-4 overflow-y-auto pb-2 pr-1">
+            {selectedRun ? (
+              <>
+                <RoutingGraph run={selectedRun} />
+                <AuctionPanel run={selectedRun} />
+                <VerificationPanel run={selectedRun} />
+              </>
+            ) : (
+              <BidArcade />
+            )}
+          </aside>
+        )}
       </div>
       <div
         className={`min-h-0 flex-1 overflow-y-auto pb-2 pr-2 ${
