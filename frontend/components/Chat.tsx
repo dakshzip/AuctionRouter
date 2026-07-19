@@ -74,22 +74,39 @@ export function Chat({
   // Streamed text lands here and is animated out at a steady rate —
   // network chunks are bursty; the typewriter effect is client-side
   const pendingRef = useRef("");
+  // Reasoning deltas buffer separately; backlog is capped so the ticker
+  // skips ahead rather than lagging minutes behind the model
+  const reasoningRef = useRef("");
 
   const streaming = live !== null;
   useEffect(() => {
     if (!streaming) {
       pendingRef.current = "";
+      reasoningRef.current = "";
       return;
     }
     const id = setInterval(() => {
       const buf = pendingRef.current;
-      if (!buf) return;
+      const rbuf = reasoningRef.current;
+      if (!buf && !rbuf) return;
       // Deliberately slow typewriter (~60 chars/s floor, ~370/s ceiling):
       // tokens arrive early via the hedge stream, so the pacing exists to
       // be read, not to catch up (first chars still render next frame)
       const n = Math.min(6, Math.max(1, Math.ceil(buf.length / 400)));
-      pendingRef.current = buf.slice(n);
-      setLive((l) => l && { ...l, text: l.text + buf.slice(0, n) });
+      // Reasoning ticker: strictly reading pace (~60-125 chars/s); the
+      // display only keeps a short tail so it can't overflow
+      const m = Math.min(2, Math.max(1, Math.ceil(rbuf.length / 300)));
+      if (buf) pendingRef.current = buf.slice(n);
+      if (rbuf) reasoningRef.current = rbuf.slice(m);
+      setLive((l) =>
+        l && {
+          ...l,
+          text: buf ? l.text + buf.slice(0, n) : l.text,
+          thinking: rbuf
+            ? (l.thinking + rbuf.slice(0, m)).slice(-140)
+            : l.thinking,
+        },
+      );
     }, 16);
     return () => clearInterval(id);
   }, [streaming]);
@@ -146,6 +163,7 @@ export function Chat({
             else if (ev.stage === "escalating") {
               // frontier rewrites from scratch: clear the failed draft
               pendingRef.current = "";
+              reasoningRef.current = "";
               setLive((l) => l && {
                 status: `⚔ BOSS FIGHT: ${ev.model}…`,
                 text: "",
@@ -164,9 +182,11 @@ export function Chat({
             setLive((l) => l && { ...l, text: "" });
             break;
           case "reasoning":
-            setLive((l) =>
-              l && { ...l, thinking: (l.thinking + (ev.text ?? "")).slice(-300) },
-            );
+            // Cap the backlog: when the model thinks faster than reading
+            // pace, drop the oldest unread reasoning and skip ahead
+            reasoningRef.current = (
+              reasoningRef.current + (ev.text ?? "")
+            ).slice(-500);
             break;
           case "verification":
             if (!ev.passed)
@@ -276,9 +296,9 @@ export function Chat({
                 )}
               </div>
               {bossThinking && (
-                <div className="font-mono text-xs italic text-stone-500">
+                <div className="line-clamp-2 max-w-full break-words font-mono text-xs italic leading-4 text-stone-500">
                   {live.thinking
-                    ? `…${live.thinking.slice(-120).trimStart()}`
+                    ? `…${live.thinking.trimStart()}`
                     : BOSS_THOUGHTS[tick % BOSS_THOUGHTS.length]}
                 </div>
               )}
