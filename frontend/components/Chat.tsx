@@ -248,7 +248,7 @@ export function Chat({
         {messages.map((msg, i) =>
           msg.role === "user" ? (
             <div key={i} className="flex justify-end">
-              <div className="max-w-[85%] border-2 border-orange-700 bg-orange-950/60 px-3 py-2 text-orange-100 shadow-[3px_3px_0_0_#000]">
+              <div className="max-w-[85%] bg-orange-950/60 px-3 py-2 text-orange-100">
                 <span className="mr-1 text-orange-500">&gt;</span>
                 {msg.text}
               </div>
@@ -256,7 +256,7 @@ export function Chat({
           ) : msg.role === "error" ? (
             <div
               key={i}
-              className="border-2 border-red-800 bg-red-950/50 px-3 py-2 text-sm text-red-300 shadow-[3px_3px_0_0_#000]"
+              className="bg-red-950/50 px-3 py-2 text-sm text-red-300"
             >
               ✖ {msg.text}
             </div>
@@ -264,10 +264,10 @@ export function Chat({
             <div key={i} className="flex justify-start">
               <div
                 onClick={() => msg.run && onSelectRun(msg.run)}
-                className={`max-w-[85%] cursor-pointer select-text border-2 px-3 py-2 text-left shadow-[3px_3px_0_0_#000] ${
+                className={`max-w-[85%] cursor-pointer select-text px-3 py-2 text-left ${
                   msg.run && msg.run.id === selectedRunId
-                    ? "border-orange-500 bg-stone-900"
-                    : "border-stone-700 bg-stone-950 hover:border-stone-500"
+                    ? "bg-stone-800"
+                    : "bg-stone-950 hover:bg-stone-900"
                 }`}
               >
                 <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
@@ -291,10 +291,8 @@ export function Chat({
         {live && (
           <div className="flex justify-start">
             <div
-              className={`max-w-[85%] border-2 px-3 py-2 shadow-[3px_3px_0_0_#000] ${
-                live.escalating
-                  ? "border-orange-600 bg-orange-950/20"
-                  : "border-stone-700 bg-stone-950"
+              className={`max-w-[85%] px-3 py-2 ${
+                live.escalating ? "bg-orange-950/20" : "bg-stone-950"
               }`}
             >
               <div className="mb-1.5 flex items-center gap-2 font-[family-name:var(--font-pixel)] text-[8px] text-orange-400">
