@@ -29,6 +29,7 @@ from .store import get_store
 class RouterState(TypedDict, total=False):
     query: str
     history: list[dict]
+    hint_model: Optional[str]
     bids: list[Bid]
     winner: Optional[str]
     draft_answer: Optional[str]
@@ -198,7 +199,17 @@ async def auction(state: RouterState) -> RouterState:
             return {"escalated": True,
                     "escalation_reason": f"Strong model disagreement (stddev {spread:.2f} > {settings.disagreement_stddev})"}
 
-    winner = max(valid, key=lambda b: b.auction_score)
+    # The user's topic toggle takes priority: a confident hint-model bid
+    # wins outright (its hedged draft is already in flight); the auction
+    # only overrides the toggle when the hint model isn't confident
+    winner = None
+    hint_key = state.get("hint_model")
+    if hint_key:
+        hint_bid = next((b for b in valid if b.model_key == hint_key), None)
+        if hint_bid and hint_bid.confidence >= settings.hint_priority_confidence:
+            winner = hint_bid
+    if winner is None:
+        winner = max(valid, key=lambda b: b.auction_score)
     out: RouterState = {"winner": winner.model_key, "escalated": False}
     if winner.draft_answer:
         # The winning bid already carries an answer — skip the draft stage
@@ -470,9 +481,11 @@ def _trim_history(history: list[dict] | None) -> list[dict]:
             for t in turns]
 
 
-async def run_query(query: str, history: list[dict] | None = None) -> RunResult:
+async def run_query(query: str, history: list[dict] | None = None,
+                    hint: str = "general") -> RunResult:
     start = time.monotonic()
     state: RouterState = {"query": query, "history": _trim_history(history),
+                          "hint_model": SPECULATIVE_HINT_MODELS.get(hint, "gemini"),
                           "usages": [], "escalated": False}
     final = await get_graph().ainvoke(state)
     run = _make_run(query, final, start)
@@ -500,6 +513,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
     # cancelled for ~a tenth of a cent of wasted cheap-model tokens.
     hedge_key = SPECULATIVE_HINT_MODELS.get(hint, "gemini")
     hedge_spec = TIER1_MODELS[hedge_key]
+    state["hint_model"] = hedge_key
 
     async def _hedge_draft():
         try:

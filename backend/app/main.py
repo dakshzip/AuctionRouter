@@ -54,7 +54,8 @@ async def health():
 async def query(req: QueryRequest):
     if not settings.openrouter_api_key:
         raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY is not set")
-    return await run_query(req.query, [t.model_dump() for t in req.history])
+    return await run_query(req.query, [t.model_dump() for t in req.history],
+                           req.hint)
 
 
 @app.post("/api/query/stream")

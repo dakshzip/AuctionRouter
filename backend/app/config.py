@@ -145,6 +145,10 @@ class Settings(BaseSettings):
     # their bid, letting the pipeline skip the separate draft round-trip
     speculative_draft_confidence: float = 0.8
 
+    # The user's topic toggle wins the auction outright when its model
+    # bids at least this confidently; below it, normal auction rules
+    hint_priority_confidence: float = 0.8
+
     # Cap completion size so a single answer can't blow the budget
     # (also keeps low-credit OpenRouter keys usable)
     max_answer_tokens: int = 2000
