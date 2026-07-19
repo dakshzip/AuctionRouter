@@ -523,7 +523,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
                                             prefer_paid=True):
                     if ev["type"] == "delta":
                         yield {"type": "token", "text": ev["text"]}
-                    else:
+                    elif ev["type"] == "final":
                         resp = ev["response"]
                 if resp is None or not resp.content.strip():
                     state["escalated"] = True
@@ -571,6 +571,8 @@ async def run_query_stream(query: str, history: list[dict] | None = None):
                                         history=state["history"]):
                 if ev["type"] == "delta":
                     yield {"type": "token", "text": ev["text"]}
+                elif ev["type"] == "reasoning_delta":
+                    yield {"type": "reasoning", "text": ev["text"]}
                 else:
                     resp = ev["response"]
             if resp is None or not resp.content.strip():

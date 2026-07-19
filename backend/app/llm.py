@@ -182,7 +182,13 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
                     tokens_out = usage.get("completion_tokens", tokens_out)
                 choices = data.get("choices") or []
                 if choices:
-                    piece = (choices[0].get("delta") or {}).get("content") or ""
+                    delta = choices[0].get("delta") or {}
+                    thinking = delta.get("reasoning") or ""
+                    if thinking:
+                        # Reasoning summaries stream before content on
+                        # reasoning models; provider support varies
+                        yield {"type": "reasoning_delta", "text": thinking}
+                    piece = delta.get("content") or ""
                     if piece:
                         parts.append(piece)
                         yield {"type": "delta", "text": piece}

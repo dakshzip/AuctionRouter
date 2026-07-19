@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { streamQuery } from "@/lib/api";
 import type { ChatTurn, RunResult } from "@/lib/types";
 import { Badge } from "./ui";
@@ -18,7 +18,20 @@ interface LiveState {
   escalating: boolean;
   // Draft text streams before the verifier has judged it
   provisional: boolean;
+  // Tail of GPT-5's streamed reasoning summary, when the provider sends one
+  thinking: string;
 }
+
+// Shown while the boss thinks silently; real reasoning deltas replace them
+const BOSS_THOUGHTS = [
+  "reasoning…",
+  "forming dependencies…",
+  "consulting ancient tomes…",
+  "grinding xp…",
+  "charging special attack…",
+  "questioning the premise…",
+  "aligning brain cells…",
+];
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -55,7 +68,16 @@ export function Chat({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [live, setLive] = useState<LiveState | null>(null);
+  const [tick, setTick] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Rotate the boss-thought phrases while GPT-5 thinks silently
+  const bossThinking = !!live?.escalating && !live.text;
+  useEffect(() => {
+    if (!bossThinking) return;
+    const id = setInterval(() => setTick((t) => t + 1), 2200);
+    return () => clearInterval(id);
+  }, [bossThinking]);
 
   const scroll = () =>
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
@@ -78,6 +100,7 @@ export function Chat({
       text: "",
       escalating: false,
       provisional: false,
+      thinking: "",
     });
     scroll();
     try {
@@ -103,10 +126,16 @@ export function Chat({
                 text: "",
                 escalating: true,
                 provisional: false,
+                thinking: "",
               });
             break;
           case "token":
             setLive((l) => l && { ...l, text: l.text + (ev.text ?? "") });
+            break;
+          case "reasoning":
+            setLive((l) =>
+              l && { ...l, thinking: (l.thinking + (ev.text ?? "")).slice(-300) },
+            );
             break;
           case "verification":
             if (!ev.passed)
@@ -215,6 +244,13 @@ export function Chat({
                   </span>
                 )}
               </div>
+              {bossThinking && (
+                <div className="font-mono text-xs italic text-stone-500">
+                  {live.thinking
+                    ? `…${live.thinking.slice(-120).trimStart()}`
+                    : BOSS_THOUGHTS[tick % BOSS_THOUGHTS.length]}
+                </div>
+              )}
               {live.text && (
                 <div className="text-stone-200">
                   <Markdown>{live.text}</Markdown>
