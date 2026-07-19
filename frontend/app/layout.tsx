@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Silkscreen, VT323 } from "next/font/google";
+import { Pixelify_Sans, VT323 } from "next/font/google";
 import "./globals.css";
 
-// Silkscreen stays legible at the tiny sizes this UI uses pixel text at;
-// Press Start 2P (the previous font) turns to mush below ~12px
-const pixelFont = Silkscreen({
+// Pixelify Sans: pixel DNA but rounded and modern — legible at small
+// sizes where Press Start 2P / Silkscreen read as noise
+const pixelFont = Pixelify_Sans({
   variable: "--font-pixel",
-  weight: ["400", "700"],
+  weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
 });
 
