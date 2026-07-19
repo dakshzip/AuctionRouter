@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import { Chakra_Petch, VT323 } from "next/font/google";
+import { Press_Start_2P } from "next/font/google";
 import "./globals.css";
 
-// Chakra Petch: squared-off techno letterforms — retro-futurist attitude
-// without literal pixels, crisp at every size
-const pixelFont = Chakra_Petch({
+// The original arcade font for UI chrome (title, tabs, toggles, panel
+// headings); body text uses the system SF Pro stack (see globals.css)
+const pixelFont = Press_Start_2P({
   variable: "--font-pixel",
-  weight: ["400", "500", "600", "700"],
-  subsets: ["latin"],
-});
-
-const termFont = VT323({
-  variable: "--font-term",
   weight: "400",
   subsets: ["latin"],
 });
@@ -30,7 +24,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${pixelFont.variable} ${termFont.variable} h-full`}
+      className={`${pixelFont.variable} h-full`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
