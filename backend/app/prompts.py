@@ -101,7 +101,10 @@ show intermediate derivations and calculations, state the final result \
 clearly, note assumptions and edge cases, and include relevant context or \
 caveats the asker would benefit from. Prefer depth and completeness over \
 brevity — do not pad with filler or restate the question, but never \
-compress at the expense of understanding. If you are unsure about a fact, \
+compress at the expense of understanding. Format the answer in Markdown: \
+## headings for major sections, **bold** for key results and conclusions, \
+fenced code blocks with a language tag for any code, and LaTeX \\( ... \\) \
+or \\[ ... \\] for mathematical notation. If you are unsure about a fact, \
 say so rather than guessing."""
 
 
