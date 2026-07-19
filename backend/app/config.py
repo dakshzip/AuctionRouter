@@ -131,6 +131,12 @@ class Settings(BaseSettings):
     # Specialist bidders legitimately disagree on everyday queries; only a
     # drastic spread with nobody confident should escalate pre-draft
     disagreement_stddev: float = 0.30
+
+    # HARD GATE: GPT-5 is reserved for hard STEM/coding/reasoning queries
+    # (mean bid estimated_difficulty at or above this). Everything else
+    # NEVER escalates — a failed verification ships the tier-1 draft
+    # marked unverified instead of summoning the frontier.
+    escalation_min_difficulty: float = 0.6
     # Skip the disagreement check when some bidder is at least this
     # confident (specialists legitimately disagree with generalists)
     disagreement_exempt_confidence: float = 0.85

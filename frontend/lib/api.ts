@@ -37,6 +37,7 @@ export interface StreamEvent {
   passed?: boolean;
   feedback?: string;
   winner?: string | null;
+  verified?: boolean;
   escalated?: boolean;
   run?: RunResult;
 }

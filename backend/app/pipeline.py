@@ -180,6 +180,19 @@ async def bid_collection(state: RouterState) -> RouterState:
     return {"bids": bids, "usages": state.get("usages", []) + usages}
 
 
+def _is_hard(state: RouterState) -> bool:
+    """Hard gate for GPT-5: only queries the bidders rated genuinely hard
+    (STEM proofs, heavy reasoning, big coding tasks) may escalate. With no
+    signal at all (every bidder errored) the gate stays open — that's an
+    infrastructure failure, not a routing decision."""
+    difficulties = [b.estimated_difficulty for b in state.get("bids", [])
+                    if b.error is None]
+    if not difficulties:
+        return True
+    mean = sum(difficulties) / len(difficulties)
+    return mean >= settings.escalation_min_difficulty
+
+
 async def auction(state: RouterState) -> RouterState:
     bids = state["bids"]
     valid = [b for b in bids if b.error is None]
@@ -188,7 +201,10 @@ async def auction(state: RouterState) -> RouterState:
 
     confidences = [b.confidence for b in valid]
     max_conf = max(confidences)
-    if max_conf < settings.min_auction_confidence:
+    # Weak bids / disagreement only escalate when the query is genuinely
+    # hard; an easy query with hesitant bidders still drafts — the
+    # verifier remains its quality gate.
+    if max_conf < settings.min_auction_confidence and _is_hard(state):
         return {"escalated": True,
                 "escalation_reason": f"Low auction confidence (max {max_conf:.2f} < {settings.min_auction_confidence})"}
 
@@ -196,7 +212,8 @@ async def auction(state: RouterState) -> RouterState:
     # bidders, a wide spread (coder bids 0.3 on a trivia question) is the
     # system working, not a red flag — so skip the check when a model is
     # highly confident.
-    if len(confidences) >= 2 and max_conf < settings.disagreement_exempt_confidence:
+    if len(confidences) >= 2 and max_conf < settings.disagreement_exempt_confidence \
+            and _is_hard(state):
         spread = statistics.pstdev(confidences)
         if spread > settings.disagreement_stddev:
             return {"escalated": True,
@@ -299,10 +316,13 @@ async def verify(state: RouterState) -> RouterState:
 
     out: RouterState = {"verification": verification, "usages": usages}
     if verification.score < settings.verification_threshold or not verification.passed:
-        out["escalated"] = True
-        out["escalation_reason"] = (
-            f"Verification failed (score {verification.score:.2f} < {settings.verification_threshold})"
-        )
+        if _is_hard(state):
+            out["escalated"] = True
+            out["escalation_reason"] = (
+                f"Verification failed (score {verification.score:.2f} < {settings.verification_threshold})"
+            )
+        # Hard gate: easy queries never escalate — the draft ships marked
+        # unverified (finalize appends the label)
     return out
 
 
@@ -365,9 +385,11 @@ async def escalate(state: RouterState) -> RouterState:
 
 async def finalize(state: RouterState) -> RouterState:
     spec = TIER1_MODELS[state["winner"]]
+    verification = state.get("verification")
+    unverified = verification is not None and not verification.passed
     return {
         "final_answer": state["draft_answer"],
-        "answered_by": spec.display_name,
+        "answered_by": spec.display_name + (" (unverified)" if unverified else ""),
         "tier": 1,
     }
 
@@ -656,10 +678,13 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             "reason": state.get("escalation_reason"),
         }
     if state.get("draft_answer") and not state.get("escalated"):
-        # Verified: flip the client's provisional badge; tokens were
-        # already streamed live
+        # Flip the client's provisional badge; tokens were already
+        # streamed live. verified=False means the hard gate shipped a
+        # draft that failed verification (easy queries never escalate).
+        v = state.get("verification")
         yield {"type": "stage", "stage": "delivering",
-               "model": TIER1_MODELS[state["winner"]].display_name}
+               "model": TIER1_MODELS[state["winner"]].display_name,
+               "verified": bool(v and v.passed)}
 
     if state.get("escalated"):
         effort, max_tokens = _frontier_plan(state)

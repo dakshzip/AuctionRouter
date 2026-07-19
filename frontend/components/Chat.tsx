@@ -171,7 +171,14 @@ export function Chat({
               setLive((l) => l && { ...l, status: "🔍 VERIFIER JUDGING…" });
             else if (ev.stage === "delivering")
               setLive((l) =>
-                l && { ...l, status: `✓ VERIFIED — ${ev.model}`, provisional: false },
+                l && {
+                  ...l,
+                  status:
+                    ev.verified === false
+                      ? `⚠ UNVERIFIED — ${ev.model}`
+                      : `✓ VERIFIED — ${ev.model}`,
+                  provisional: false,
+                },
               );
             else if (ev.stage === "escalating") {
               // frontier rewrites from scratch: clear the failed draft
