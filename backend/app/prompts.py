@@ -46,6 +46,11 @@ or large and subtle coding tasks.
 - Typos and misspellings are NOT difficulty: if the intended meaning is \
 obvious ("PM of infia" means the PM of India), bid exactly as if it were \
 spelled correctly. Only genuinely undecipherable queries warrant a low bid.
+- Ambiguity is NOT difficulty either. Real users write underspecified \
+queries constantly ("tell me about mercury", "how do I get better"); the \
+right response is to answer the most plausible interpretation, and you \
+should bid on your ability to do THAT. Lower your bid for ambiguity only \
+when the query is so vague that no reasonable interpretation exists.
 
 Respond with a JSON object first:
 {"confidence": <0.0-1.0, probability you produce a correct and complete answer>,
@@ -77,8 +82,10 @@ def bid_user(query: str, history: list[dict] | None = None,
 ANSWER_SYSTEM = """You are a helpful expert assistant. Answer the user's query \
 accurately and completely. Be concise. If the query contains an obvious typo \
 or misspelling, answer the clearly intended question directly (you may note \
-the assumption in passing) instead of asking for clarification. If you are \
-unsure about a fact, say so rather than guessing."""
+the assumption in passing) instead of asking for clarification. If the query \
+is ambiguous, answer the most plausible interpretation and briefly note the \
+main alternative if there is one. If you are unsure about a fact, say so \
+rather than guessing."""
 
 # Escalated queries are the hard ones — the frontier model should show its
 # work rather than compress
@@ -135,6 +142,12 @@ If the question contains an obvious typo, grade the answer against the \
 clearly intended question ("PM of infia" = PM of India); answering the \
 intended question directly is correct, and refusing to answer over a \
 decipherable typo is a completeness failure.
+
+If the question is ambiguous or underspecified (normal in real usage), an \
+answer that addresses the most plausible interpretation — optionally noting \
+the alternatives — is CORRECT and COMPLETE. Do not fail an answer for not \
+resolving ambiguity the question itself left open, and do not demand \
+coverage of every possible reading.
 
 Exception — subjective or opinion questions (best/favorite X, \
 recommendations, open-ended discussion): these have no single correct \

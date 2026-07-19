@@ -124,10 +124,13 @@ class Settings(BaseSettings):
 
     # Escalation thresholds (PRD section 9)
     # Pre-filter only — the verifier still gates every tier-1 draft, so
-    # this can be loose; it exists to skip drafting obviously-doomed answers
-    min_auction_confidence: float = 0.65
+    # this can be loose; it exists to skip drafting obviously-doomed
+    # answers (genuinely hard queries bid 0.2-0.4)
+    min_auction_confidence: float = 0.55
     verification_threshold: float = 0.80
-    disagreement_stddev: float = 0.22
+    # Specialist bidders legitimately disagree on everyday queries; only a
+    # drastic spread with nobody confident should escalate pre-draft
+    disagreement_stddev: float = 0.30
     # Skip the disagreement check when some bidder is at least this
     # confident (specialists legitimately disagree with generalists)
     disagreement_exempt_confidence: float = 0.85
