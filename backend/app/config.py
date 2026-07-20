@@ -40,11 +40,11 @@ class ModelSpec:
 TIER1_MODELS: dict[str, ModelSpec] = {
     # Bidders/verifier run free-first with an automatic paid fallback when
     # the free pool is rate-limited. Pricing fields = the paid fallback.
-    "hermes": ModelSpec(  # general
-        key="hermes",
-        openrouter_id="nousresearch/hermes-4-70b",  # paid only, no free variant
-        display_name="Hermes 4 70B",
-        cost_per_mtok_in=0.13,
+    "llama": ModelSpec(  # general
+        key="llama",
+        openrouter_id="meta-llama/llama-3.1-70b-instruct",  # paid only, no free variant
+        display_name="Llama 3.1 70B",
+        cost_per_mtok_in=0.40,
         cost_per_mtok_out=0.40,
         specialty="a capable generalist: general knowledge, writing, "
                   "summaries, everyday questions, and reasoning; solid "
@@ -77,7 +77,7 @@ TIER1_MODELS: dict[str, ModelSpec] = {
 # Topic toggle -> which tier-1 model drafts speculatively during bidding.
 # If the auction then picks that model, its draft is already in flight.
 SPECULATIVE_HINT_MODELS: dict[str, str] = {
-    "general": "hermes",
+    "general": "llama",
     "coding": "qwen",
     "reasoning": "deepseek",
 }
