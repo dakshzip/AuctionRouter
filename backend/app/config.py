@@ -53,10 +53,11 @@ TIER1_MODELS: dict[str, ModelSpec] = {
     ),
     "qwen": ModelSpec(  # coding
         key="qwen",
-        openrouter_id="qwen/qwen3-coder-flash",  # paid only, no free variant
-        display_name="Qwen3 Coder Flash",
-        cost_per_mtok_in=0.195,
-        cost_per_mtok_out=0.975,
+        openrouter_id="qwen/qwen3-coder:free",
+        fallback_id="qwen/qwen3-coder",
+        display_name="Qwen3 Coder",
+        cost_per_mtok_in=0.22,
+        cost_per_mtok_out=1.80,
         specialty="a coding specialist: strongest at writing, debugging, and "
                   "explaining code and software architecture; weaker at "
                   "non-technical general knowledge",

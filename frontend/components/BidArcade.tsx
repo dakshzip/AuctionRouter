@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 const BOTS = [
   { name: "DEEPSEEK", color: "#38bdf8", dark: "#075985" },
-  { name: "QWEN-FLASH", color: "#a3e635", dark: "#3f6212" },
+  { name: "QWEN-CODER", color: "#a3e635", dark: "#3f6212" },
   { name: "NEMOTRON", color: "#fb923c", dark: "#9a3412" },
 ];
 
