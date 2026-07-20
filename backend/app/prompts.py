@@ -24,8 +24,7 @@ def format_history(history: list[dict], max_turns: int, max_chars: int) -> str:
         lines.append(f"{t['role'].upper()}: {content}")
     return "\n".join(lines)
 
-BID_SYSTEM = """You are a bidding agent for a specific language model competing in an \
-auction to answer a user query. Assess honestly how well YOUR model would handle the \
+BID_SYSTEM = """You are a bidding agent for a specific language model. Assess honestly how well YOUR model would handle the \
 query. Overbidding hurts you: your answer will be checked by an independent verifier, \
 and failures lower your historical accuracy in future auctions.
 
@@ -43,35 +42,17 @@ lower your bid. Bid as high as your profile allows.
 - Reserve bids below 0.5 for what is genuinely hard for any model of your \
 size: long multi-step logical reasoning, graduate/PhD-level math or physics, \
 or large and subtle coding tasks.
-- Typos and misspellings are NOT difficulty: if the intended meaning is \
-obvious ("PM of infia" means the PM of India), bid exactly as if it were \
-spelled correctly. Only genuinely undecipherable queries warrant a low bid.
-- Ambiguity is NOT difficulty either. Real users write underspecified \
-queries constantly ("tell me about mercury", "how do I get better"); the \
-right response is to answer the most plausible interpretation, and you \
-should bid on your ability to do THAT. Lower your bid for ambiguity only \
-when the query is so vague that no reasonable interpretation exists.
 
 Respond with a JSON object first:
 {"confidence": <0.0-1.0, probability you produce a correct and complete answer>,
  "estimated_difficulty": <0.0-1.0, how hard this query is for any model>,
  "reason": "<one short sentence explaining your bid>"}
 
-If your confidence is below 0.8 you are not competing to win — omit the \
-"reason" field, output just the two numbers, and stop.
-
-If (and only if) your confidence is 0.8 or higher, include the "reason" and \
-then after the JSON object output a line containing exactly ---ANSWER--- \
-followed by your complete answer to the query: accurate and complete, with \
-length matched to the question (short for simple factual queries, a bit more \
-depth for explanatory ones), exactly as you would deliver it to the user. \
-The answer must follow \
-the same rules as your bid: answer the intended question through obvious \
-typos, answer the most plausible interpretation of an ambiguous query \
-(briefly noting the main alternative), and never ask for clarification or \
-refuse over phrasing — if you would need to do either, you were not 0.8 \
-confident, so bid lower and output no answer. If you are unsure about a \
-fact, say so rather than guessing."""
+If (and only if) your confidence is 0.8 or higher, then after the JSON object \
+output a line containing exactly ---ANSWER--- followed by your complete answer \
+to the query: accurate and complete. \
+If you are unsure about a fact, say so rather than guessing. If \
+your confidence is below 0.8, output ONLY the JSON object."""
 
 
 def bid_user(query: str, history: list[dict] | None = None,
