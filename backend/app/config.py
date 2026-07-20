@@ -100,6 +100,12 @@ class Settings(BaseSettings):
     # empty string keeps OpenRouter's default (price)
     openrouter_provider_sort: str = "latency"
 
+    # Web search (OpenRouter web plugin). Enabled only for the winning
+    # draft / frontier when a bidder flags the query as needing fresh
+    # info (see needs_web). $0.004 per search; keep results small.
+    web_search_enabled: bool = True
+    web_search_max_results: int = 3
+
     # --- Deployment / abuse protection --------------------------------------
     # Shared access code required on every /api/* request (X-Access-Code
     # header). Empty string disables the gate (local dev convenience).

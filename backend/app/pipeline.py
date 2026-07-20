@@ -32,6 +32,7 @@ class RouterState(TypedDict, total=False):
     hint_model: Optional[str]
     bids: list[Bid]
     winner: Optional[str]
+    needs_web: bool
     draft_answer: Optional[str]
     verification: Optional[Verification]
     escalated: bool
@@ -89,6 +90,7 @@ async def _get_bid(model_key: str, query: str,
             reason=str(data.get("reason", ""))[:300],
             historical_accuracy=hist,
             draft_answer=speculative,
+            needs_web=bool(data.get("needs_web", False)),
         )
         usage = Usage(
             model_key=model_key, model_name=spec.display_name, stage="bid",
@@ -231,8 +233,12 @@ async def auction(state: RouterState) -> RouterState:
     if winner is None:
         winner = max(valid, key=lambda b: b.auction_score)
     out: RouterState = {"winner": winner.model_key, "escalated": False}
-    if winner.draft_answer:
-        # The winning bid already carries an answer — skip the draft stage
+    # A fresh-info query needs a web-grounded answer — any speculative bid
+    # answer was written from stale training data, so discard it and force
+    # a real (web-enabled) draft.
+    needs_web = winner.needs_web
+    out["needs_web"] = needs_web
+    if winner.draft_answer and not needs_web:
         out["draft_answer"] = winner.draft_answer
     return out
 
@@ -241,7 +247,8 @@ async def draft(state: RouterState) -> RouterState:
     spec = TIER1_MODELS[state["winner"]]
     try:
         resp = await chat(spec, prompts.ANSWER_SYSTEM, state["query"],
-                          history=state.get("history"), prefer_paid=True)
+                          history=state.get("history"), prefer_paid=True,
+                          web=state.get("needs_web", False))
     except LLMError as e:
         return {"escalated": True, "escalation_reason": f"Winner failed to answer: {str(e)[:150]}"}
     if not resp.content.strip():
@@ -352,7 +359,8 @@ async def escalate(state: RouterState) -> RouterState:
         resp = await chat(TIER2_MODEL, prompts.FRONTIER_SYSTEM, state["query"],
                           max_tokens=max_tokens,
                           reasoning_effort=effort,
-                          history=state.get("history"))
+                          history=state.get("history"),
+                          web=state.get("needs_web", False))
         if not resp.content.strip():
             raise LLMError(f"{TIER2_MODEL.openrouter_id}: empty response "
                            "(reasoning consumed the token budget)")
@@ -587,8 +595,11 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
         "reason": state.get("escalation_reason"),
     }
 
+    # A needs_web winner can't use the hedge draft (generated at t=0 with no
+    # web access) — drop it and let the web-enabled draft path run instead.
     hedge_won = (not state.get("escalated")
-                 and state.get("winner") == hedge_key)
+                 and state.get("winner") == hedge_key
+                 and not state.get("needs_web"))
     if not hedge_won:
         # Another model won (or we're escalating): drop the hedge and
         # clear its provisional text on the client
@@ -649,7 +660,8 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                 resp = None
                 async for ev in chat_stream(spec, prompts.ANSWER_SYSTEM, query,
                                             history=state["history"],
-                                            prefer_paid=True):
+                                            prefer_paid=True,
+                                            web=state.get("needs_web", False)):
                     if ev["type"] == "delta":
                         yield {"type": "token", "text": ev["text"]}
                     elif ev["type"] == "final":
@@ -702,7 +714,8 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             async for ev in chat_stream(TIER2_MODEL, prompts.FRONTIER_SYSTEM, query,
                                         max_tokens=max_tokens,
                                         reasoning_effort=effort,
-                                        history=state["history"]):
+                                        history=state["history"],
+                                        web=state.get("needs_web", False)):
                 if ev["type"] == "delta":
                     yield {"type": "token", "text": ev["text"]}
                 elif ev["type"] == "reasoning_delta":

@@ -42,10 +42,19 @@ lower your bid. Bid as high as your profile allows.
 - Reserve bids below 0.5 for what is genuinely hard for any model of your \
 size: long multi-step logical reasoning, graduate/PhD-level math or physics, \
 or large and subtle coding tasks.
+- If answering needs current or real-time info (you'd set needs_web true), \
+the winner is given live web search results before answering. So bid on how \
+well you'd answer WITH those results — a recent-events or "what's the latest" \
+question is NOT inherently hard; don't bid low just because it postdates your \
+training. Set needs_web true and bid your normal confidence.
 
 Respond with a JSON object first:
 {"confidence": <0.0-1.0, probability you produce a correct and complete answer>,
  "estimated_difficulty": <0.0-1.0, how hard this query is for any model>,
+ "needs_web": <true if answering CORRECTLY requires up-to-date or real-time \
+information you cannot know from training — current events, today's news, \
+live prices/scores, latest releases, "who is X now", recent data; false for \
+timeless questions>,
  "reason": "<one short sentence explaining your bid>"}
 
 If (and only if) your confidence is 0.8 or higher, then after the JSON object \

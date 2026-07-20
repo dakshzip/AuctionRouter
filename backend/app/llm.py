@@ -63,7 +63,8 @@ def _request_body(model: ModelSpec, system: str, user: str,
                   max_tokens: int | None,
                   reasoning_effort: str | None,
                   history: list[dict] | None,
-                  prefer_paid: bool) -> dict:
+                  prefer_paid: bool,
+                  web: bool = False) -> dict:
     # Latency-critical calls (bids, drafts) skip the free pool: paid
     # endpoints respond in a fraction of the time
     model_id = model.fallback_id if prefer_paid and model.fallback_id \
@@ -82,6 +83,11 @@ def _request_body(model: ModelSpec, system: str, user: str,
         # Route to the fastest provider for the model rather than the
         # default (cheapest) — big variance cut for multi-provider models
         body["provider"] = {"sort": settings.openrouter_provider_sort}
+    if web and settings.web_search_enabled:
+        # OpenRouter web plugin: runs a search and injects results into
+        # context before the model answers ($0.004/search)
+        body["plugins"] = [{"id": "web",
+                            "max_results": settings.web_search_max_results}]
     return body
 
 
@@ -90,10 +96,11 @@ async def chat(model: ModelSpec, system: str, user: str,
                max_tokens: int | None = None,
                reasoning_effort: str | None = None,
                history: list[dict] | None = None,
-               prefer_paid: bool = False) -> LLMResponse:
+               prefer_paid: bool = False,
+               web: bool = False) -> LLMResponse:
     start = time.monotonic()
     body = _request_body(model, system, user, max_tokens,
-                         reasoning_effort, history, prefer_paid)
+                         reasoning_effort, history, prefer_paid, web)
 
     # Free-tier models often 429 transiently ("rate-limited upstream,
     # retry shortly"), so retry a couple of times honoring Retry-After.
@@ -134,14 +141,15 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
                       max_tokens: int | None = None,
                       reasoning_effort: str | None = None,
                       history: list[dict] | None = None,
-                      prefer_paid: bool = False):
+                      prefer_paid: bool = False,
+                      web: bool = False):
     """Streaming variant of chat().
 
     Yields {"type": "delta", "text": ...} per token chunk, then a final
     {"type": "final", "response": LLMResponse} with full content and usage.
     """
     body = _request_body(model, system, user, max_tokens,
-                         reasoning_effort, history, prefer_paid)
+                         reasoning_effort, history, prefer_paid, web)
     body["stream"] = True
     body["stream_options"] = {"include_usage": True}
 

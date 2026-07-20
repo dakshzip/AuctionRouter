@@ -30,6 +30,7 @@ class Bid(BaseModel):
     auction_score: float = 0.0
     error: Optional[str] = None       # set when a bidder failed / timed out
     draft_answer: Optional[str] = None  # speculative answer from a confident bidder
+    needs_web: bool = False           # query needs fresh/real-time info
 
 
 class Verification(BaseModel):
