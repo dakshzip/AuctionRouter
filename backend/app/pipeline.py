@@ -402,15 +402,27 @@ async def finalize(state: RouterState) -> RouterState:
     }
 
 
+def _skip_verify(state: RouterState) -> bool:
+    """Creative writing has no correct answer to check — skip the verifier
+    entirely when the creative-specialist model won the auction."""
+    creative_key = SPECULATIVE_HINT_MODELS.get("creative")
+    return creative_key is not None and state.get("winner") == creative_key
+
+
 def _after_auction(state: RouterState) -> str:
     if state.get("escalated"):
         return "escalate"
-    # Winner's bid carried a speculative answer: verify it directly
-    return "verify" if state.get("draft_answer") else "draft"
+    if state.get("draft_answer"):
+        # Winner's bid carried a speculative answer: verify it, or finalize
+        # straight away for creative winners
+        return "finalize" if _skip_verify(state) else "verify"
+    return "draft"
 
 
 def _after_draft(state: RouterState) -> str:
-    return "escalate" if state.get("escalated") else "verify"
+    if state.get("escalated"):
+        return "escalate"
+    return "finalize" if _skip_verify(state) else "verify"
 
 
 def _after_verify(state: RouterState) -> str:
@@ -429,8 +441,11 @@ def build_graph():
     g.set_entry_point("bid_collection")
     g.add_edge("bid_collection", "auction")
     g.add_conditional_edges("auction", _after_auction,
-                            {"escalate": "escalate", "draft": "draft", "verify": "verify"})
-    g.add_conditional_edges("draft", _after_draft, {"escalate": "escalate", "verify": "verify"})
+                            {"escalate": "escalate", "draft": "draft",
+                             "verify": "verify", "finalize": "finalize"})
+    g.add_conditional_edges("draft", _after_draft,
+                            {"escalate": "escalate", "verify": "verify",
+                             "finalize": "finalize"})
     g.add_conditional_edges("verify", _after_verify, {"escalate": "escalate", "finalize": "finalize"})
     g.add_edge("escalate", END)
     g.add_edge("finalize", END)
@@ -630,8 +645,9 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                                                   resp.served_model),
                 latency_ms=resp.latency_ms,
             )]
-            yield {"type": "stage", "stage": "verifying"}
-            state.update(await verify(state))
+            if not _skip_verify(state):
+                yield {"type": "stage", "stage": "verifying"}
+                state.update(await verify(state))
         else:
             # Hedge produced nothing: clear its text and use the normal
             # draft stage below
@@ -642,18 +658,21 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
         # Streaming-first: draft tokens go to the client as they exist, so
         # the user reads while the verifier judges. A failed verification
         # clears the provisional text via the existing "escalating" stage.
-        if hedge_won and state.get("verification"):
-            pass  # hedge already streamed and verified above
+        if hedge_won and state.get("draft_answer"):
+            pass  # hedge already streamed (and verified) above
         elif state.get("draft_answer"):
             # Winner's bid already carried the answer — verify it in
-            # parallel while the client renders the draft
+            # parallel while the client renders the draft (creative skips it)
             yield {"type": "stage", "stage": "drafting",
                    "model": spec.display_name, "speculative": True}
-            verify_task = asyncio.create_task(verify(state))
-            yield {"type": "stage", "stage": "verifying"}
-            # One event; the client's typewriter animation does the pacing
-            yield {"type": "token", "text": state["draft_answer"]}
-            state.update(await verify_task)
+            if _skip_verify(state):
+                yield {"type": "token", "text": state["draft_answer"]}
+            else:
+                verify_task = asyncio.create_task(verify(state))
+                yield {"type": "stage", "stage": "verifying"}
+                # One event; the client's typewriter animation does the pacing
+                yield {"type": "token", "text": state["draft_answer"]}
+                state.update(await verify_task)
         else:
             yield {"type": "stage", "stage": "drafting", "model": spec.display_name}
             try:
@@ -681,7 +700,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             except LLMError as e:
                 state["escalated"] = True
                 state["escalation_reason"] = f"Winner failed to answer: {str(e)[:150]}"
-            if state.get("draft_answer"):
+            if state.get("draft_answer") and not _skip_verify(state):
                 yield {"type": "stage", "stage": "verifying"}
                 state.update(await verify(state))
 
