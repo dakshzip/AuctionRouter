@@ -199,8 +199,8 @@ class Settings(BaseSettings):
     verifier_reasoning_effort: str = "low"
 
     # Frontier (tier-2) model, overridable via FRONTIER_MODEL_ID — evals
-    # swap in a big-but-cheap open model to avoid GPT-5 bills
-    frontier_model_id: str = "openai/gpt-5"
+    # swap in a big-but-cheap open model to avoid frontier bills
+    frontier_model_id: str = "openai/gpt-5.6-terra"
 
 
 settings = Settings()
@@ -210,6 +210,7 @@ settings = Settings()
 # (display name, $/Mtok in, $/Mtok out) per known frontier choice; unknown
 # ids fall back to GPT-5 pricing so cost metrics stay conservative
 _FRONTIER_SPECS: dict[str, tuple[str, float, float]] = {
+    "openai/gpt-5.6-terra": ("GPT-5.6 Terra", 2.50, 15.00),
     "openai/gpt-5": ("GPT-5", 1.25, 10.00),
     "deepseek/deepseek-r1": ("DeepSeek R1", 0.50, 2.15),
     "meta-llama/llama-4-maverick": ("Llama 4 Maverick", 0.15, 0.60),
