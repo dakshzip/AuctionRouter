@@ -274,7 +274,7 @@ export function Chat({
             <div key={i} className="flex justify-start">
               <div
                 onClick={() => msg.run && onSelectRun(msg.run)}
-                className={`w-full cursor-pointer select-text px-3 py-2 text-left ${
+                className={`max-w-[80%] cursor-pointer select-text px-3 py-2 text-left ${
                   msg.run && msg.run.id === selectedRunId
                     ? "shadow-[inset_3px_0_0_0_#f97316]"
                     : "hover:shadow-[inset_3px_0_0_0_#57534e]"
@@ -301,7 +301,7 @@ export function Chat({
         {live && (
           <div className="flex justify-start">
             <div
-              className={`w-full px-3 py-2 ${
+              className={`max-w-[80%] px-3 py-2 ${
                 live.escalating ? "bg-orange-950/20" : ""
               }`}
             >
