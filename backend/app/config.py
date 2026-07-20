@@ -54,12 +54,14 @@ TIER1_MODELS: dict[str, ModelSpec] = {
     ),
     "deepseek": ModelSpec(
         key="deepseek",
-        openrouter_id="deepseek/deepseek-chat",  # no free variant; cheapest paid
-        display_name="DeepSeek",
-        cost_per_mtok_in=0.20,
-        cost_per_mtok_out=0.80,
+        openrouter_id="deepseek/deepseek-v4-flash:free",
+        fallback_id="deepseek/deepseek-v4-flash",
+        display_name="DeepSeek V4 Flash",
+        cost_per_mtok_in=0.09,
+        cost_per_mtok_out=0.18,
         specialty="strongest at mathematical reasoning, logic puzzles, and "
-                  "quantitative problems",
+                  "quantitative problems; solid at code; average at niche "
+                  "world knowledge",
     ),
     "qwen": ModelSpec(
         key="qwen",

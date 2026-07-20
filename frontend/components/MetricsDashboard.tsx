@@ -7,7 +7,7 @@ import { Bar, Card, Stat } from "./ui";
 
 const MODEL_LABELS: Record<string, string> = {
   nemotron: "Nemotron 3 Ultra (general)",
-  deepseek: "DeepSeek (math)",
+  deepseek: "DeepSeek V4 Flash (math)",
   qwen: "Qwen3 Coder (code)",
 };
 
