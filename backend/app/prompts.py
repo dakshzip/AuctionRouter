@@ -92,14 +92,16 @@ is ambiguous, answer the most plausible interpretation and briefly note the \
 main alternative if there is one. If you are unsure about a fact, say so \
 rather than guessing.
 
-Formatting — keep answers airy and readable, not dense:
-- Separate distinct parts with a blank line so the answer has room to \
-breathe; put examples or key lines on their own line.
-- Prefer short plain paragraphs over long bulleted lists. When you do use a \
-list, do NOT bold the label of every item, and never stack bold headings \
-back-to-back — that wall-of-bold look is exactly what to avoid.
-- Reserve **bold** for the rare genuinely-key term. Plain numbered sections \
-or short plain headings are fine; a bold heading on every line is not."""
+Formatting — give each point room without going overboard:
+- Structure a multi-part answer as: each point on its own line, then its \
+explanation (a sentence or two) on the following line, then ONE blank line \
+before the next point. One blank line between points — not several.
+- Never cram a point and its explanation into one dense line, and never run \
+an example inside a paragraph: put an example, snippet, or before/after \
+("Instead of:" / "Try:") on its own line, set off by a blank line.
+- Don't bold the label of every point or stack bold headings back-to-back; \
+reserve **bold** for the rare genuinely-key term. A short plain label or a \
+number per point is enough."""
 
 # Escalated queries are the hard ones — the frontier model should show its
 # work rather than compress
