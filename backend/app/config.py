@@ -40,16 +40,15 @@ class ModelSpec:
 TIER1_MODELS: dict[str, ModelSpec] = {
     # Bidders/verifier run free-first with an automatic paid fallback when
     # the free pool is rate-limited. Pricing fields = the paid fallback.
-    "deepseek": ModelSpec(  # general
-        key="deepseek",
-        openrouter_id="deepseek/deepseek-v4-flash:free",
-        fallback_id="deepseek/deepseek-v4-flash",
-        display_name="DeepSeek V4 Flash",
-        cost_per_mtok_in=0.09,
-        cost_per_mtok_out=0.18,
-        specialty="a fast, capable generalist: general knowledge, writing, "
-                  "summaries, and everyday questions; solid all-rounder "
-                  "across most topics",
+    "gemini": ModelSpec(  # general
+        key="gemini",
+        openrouter_id="google/gemini-2.5-flash-lite",  # paid only, no free variant
+        display_name="Gemini 2.5 Flash Lite",
+        cost_per_mtok_in=0.10,
+        cost_per_mtok_out=0.40,
+        specialty="a fast lightweight generalist: general knowledge, writing, "
+                  "summaries, and everyday questions; solid all-rounder, less "
+                  "specialized for hard math or large coding tasks",
     ),
     "qwen": ModelSpec(  # coding
         key="qwen",
@@ -62,25 +61,25 @@ TIER1_MODELS: dict[str, ModelSpec] = {
                   "explaining code and software architecture; weaker at "
                   "non-technical general knowledge",
     ),
-    "nemotron": ModelSpec(  # math / reasoning
-        key="nemotron",
-        openrouter_id="nvidia/nemotron-3-ultra-550b-a55b:free",
-        fallback_id="nvidia/nemotron-3-ultra-550b-a55b",
-        display_name="Nemotron 3 Ultra",
-        cost_per_mtok_in=0.60,
-        cost_per_mtok_out=3.60,
-        specialty="strongest at mathematical reasoning, logic puzzles, "
-                  "quantitative problems, and hard multi-step reasoning; "
-                  "a large capable reasoner",
+    "deepseek": ModelSpec(  # math / reasoning
+        key="deepseek",
+        openrouter_id="deepseek/deepseek-v4-flash:free",
+        fallback_id="deepseek/deepseek-v4-flash",
+        display_name="DeepSeek V4 Flash",
+        cost_per_mtok_in=0.09,
+        cost_per_mtok_out=0.18,
+        specialty="strongest at mathematical reasoning, logic puzzles, and "
+                  "quantitative problems; solid at code; average at niche "
+                  "world knowledge",
     ),
 }
 
 # Topic toggle -> which tier-1 model drafts speculatively during bidding.
 # If the auction then picks that model, its draft is already in flight.
 SPECULATIVE_HINT_MODELS: dict[str, str] = {
-    "general": "deepseek",
+    "general": "gemini",
     "coding": "qwen",
-    "reasoning": "nemotron",
+    "reasoning": "deepseek",
 }
 
 # --- Verifier ---------------------------------------------------------------
