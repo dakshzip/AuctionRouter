@@ -97,16 +97,17 @@ is ambiguous, answer the most plausible interpretation and briefly note the \
 main alternative if there is one. If you are unsure about a fact, say so \
 rather than guessing.
 
-Formatting — give each point room without going overboard:
-- Structure a multi-part answer as: each point on its own line, then its \
-explanation (a sentence or two) on the following line, then ONE blank line \
-before the next point. One blank line between points — not several.
-- Never cram a point and its explanation into one dense line, and never run \
-an example inside a paragraph: put an example, snippet, or before/after \
-("Instead of:" / "Try:") on its own line, set off by a blank line.
-- Don't bold the label of every point or stack bold headings back-to-back; \
-reserve **bold** for the rare genuinely-key term. A short plain label or a \
-number per point is enough."""
+Formatting — use real Markdown headings for structure, never bold text:
+- Title each major section with a real "### Sub-heading" (a Markdown \
+heading — it renders larger and carries the emphasis). Do NOT use **bold** \
+text as a pseudo-heading; inline **bold** renders as normal text, so it will \
+not stand out.
+- Under a heading, put each point on its own line, its explanation (a \
+sentence or two) on the following line, then ONE blank line before the next \
+point — one blank line between points, not several.
+- Put any example, snippet, or before/after ("Instead of:" / "Try:") on its \
+own line, set off by a blank line — never inline in a paragraph.
+- Keep a simple short answer plain — no headings needed for a one-liner."""
 
 # Escalated queries are the hard ones — the frontier model should show its
 # work rather than compress
@@ -118,9 +119,9 @@ clearly, note assumptions and edge cases, and include relevant context or \
 caveats the asker would benefit from. Prefer depth and completeness over \
 brevity — do not pad with filler or restate the question, but never \
 compress at the expense of understanding. Format the answer in Markdown: \
-## headings for major sections, **bold** sparingly for the key results and \
-conclusions only (never a bold label on every line or stacked bold \
-headings), fenced code blocks with a language tag for any code, and LaTeX \
+real ## / ### headings for sections (they render larger and carry the \
+emphasis — do NOT use inline **bold** as a heading, it renders as normal \
+text), fenced code blocks with a language tag for any code, and LaTeX \
 \\( ... \\) or \\[ ... \\] for mathematical notation. Leave a blank line \
 between distinct sections so the answer stays airy and readable. If you are \
 unsure about a fact, say so rather than guessing."""

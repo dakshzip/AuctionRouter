@@ -515,7 +515,7 @@ async def run_query(query: str, history: list[dict] | None = None,
                     hint: str = "general") -> RunResult:
     start = time.monotonic()
     state: RouterState = {"query": query, "history": _trim_history(history),
-                          "hint_model": SPECULATIVE_HINT_MODELS.get(hint, "gemini"),
+                          "hint_model": SPECULATIVE_HINT_MODELS.get(hint, "hermes"),
                           "usages": [], "escalated": False}
     final = await get_graph().ainvoke(state)
     run = _make_run(query, final, start)
@@ -541,7 +541,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
     # bids, and its tokens stream to the client IMMEDIATELY — hint-priority
     # routing means this model usually wins, so the provisional text is
     # usually final. If another model wins, a "reset" event clears it.
-    hedge_key = SPECULATIVE_HINT_MODELS.get(hint, "gemini")
+    hedge_key = SPECULATIVE_HINT_MODELS.get(hint, "hermes")
     hedge_spec = TIER1_MODELS[hedge_key]
     state["hint_model"] = hedge_key
 

@@ -6,7 +6,7 @@ import type { MetricsSummary } from "@/lib/types";
 import { Bar, Card, Stat } from "./ui";
 
 const MODEL_LABELS: Record<string, string> = {
-  gemini: "Gemini 2.5 Flash Lite (general)",
+  hermes: "Hermes 4 70B (general)",
   qwen: "Qwen3 Coder (code)",
   deepseek: "DeepSeek V4 Flash (math)",
 };
