@@ -40,17 +40,17 @@ class ModelSpec:
 TIER1_MODELS: dict[str, ModelSpec] = {
     # Bidders/verifier run free-first with an automatic paid fallback when
     # the free pool is rate-limited. Pricing fields = the paid fallback.
-    "gemini": ModelSpec(
-        key="gemini",
-        openrouter_id="google/gemma-4-26b-a4b-it:free",
-        fallback_id="google/gemini-2.5-flash-lite",
-        display_name="Gemma 4 / Gemini Lite",
-        cost_per_mtok_in=0.10,
-        cost_per_mtok_out=0.40,
-        specialty="a fast lightweight generalist: strong at general knowledge, "
-                  "summaries, and everyday questions; NOT a code specialist and "
-                  "weak at hard math proofs and complex multi-step reasoning — "
-                  "defer those to the specialists",
+    "nemotron": ModelSpec(
+        key="nemotron",
+        openrouter_id="nvidia/nemotron-3-ultra-550b-a55b:free",
+        fallback_id="nvidia/nemotron-3-ultra-550b-a55b",
+        display_name="Nemotron 3 Ultra",
+        cost_per_mtok_in=0.60,
+        cost_per_mtok_out=3.60,
+        specialty="a powerful large generalist: strong at general knowledge, "
+                  "writing, summaries, everyday questions, and multi-step "
+                  "reasoning; competent at code but defer large or subtle "
+                  "coding tasks to the code specialist",
     ),
     "deepseek": ModelSpec(
         key="deepseek",
@@ -77,7 +77,7 @@ TIER1_MODELS: dict[str, ModelSpec] = {
 # Topic toggle -> which tier-1 model drafts speculatively during bidding.
 # If the auction then picks that model, its draft is already in flight.
 SPECULATIVE_HINT_MODELS: dict[str, str] = {
-    "general": "gemini",
+    "general": "nemotron",
     "coding": "qwen",
     "reasoning": "deepseek",
 }
@@ -85,10 +85,10 @@ SPECULATIVE_HINT_MODELS: dict[str, str] = {
 # --- Verifier ---------------------------------------------------------------
 VERIFIER_MODEL = ModelSpec(
     key="verifier",
-    openrouter_id="openai/gpt-oss-120b",
-    display_name="GPT-OSS 120B (Verifier)",
-    cost_per_mtok_in=0.04,
-    cost_per_mtok_out=0.17,
+    openrouter_id="tencent/hy3",
+    display_name="Tencent Hy3 (Verifier)",
+    cost_per_mtok_in=0.20,
+    cost_per_mtok_out=0.80,
 )
 
 class Settings(BaseSettings):

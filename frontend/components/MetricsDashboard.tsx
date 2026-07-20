@@ -6,7 +6,7 @@ import type { MetricsSummary } from "@/lib/types";
 import { Bar, Card, Stat } from "./ui";
 
 const MODEL_LABELS: Record<string, string> = {
-  gemini: "Gemma 4 (general)",
+  nemotron: "Nemotron 3 Ultra (general)",
   deepseek: "DeepSeek (math)",
   qwen: "Qwen3 Coder (code)",
 };

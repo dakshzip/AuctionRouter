@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 // Pure CSS pixel art — each sprite is a grid of colored cells.
 
 const BOTS = [
-  { name: "GEMMA", color: "#fb923c", dark: "#9a3412" },
+  { name: "NEMOTRON", color: "#fb923c", dark: "#9a3412" },
   { name: "DEEPSEEK", color: "#38bdf8", dark: "#075985" },
   { name: "QWEN-CODER", color: "#a3e635", dark: "#3f6212" },
 ];
