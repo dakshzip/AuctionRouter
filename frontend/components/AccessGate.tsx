@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { setAccessCode } from "@/lib/api";
+import { BidArcade } from "./BidArcade";
 
 // Simple shared-code gate. Not real auth — one code shared with viewers —
 // but it stops anonymous bots from spending the owner's API credits. The
@@ -25,11 +26,20 @@ export function AccessGate({
   return (
     <div className="flex h-screen items-center justify-center px-6">
       <div className="w-full max-w-sm space-y-4 text-center">
-        <h1 className="font-[family-name:var(--font-pixel)] text-2xl text-stone-200">
+        <h1 className="crt font-[family-name:var(--font-pixel)] text-3xl text-stone-200">
           AUCTION
-          <span className="text-orange-500">ROUTER</span>
+          <span className="glow-pulse text-orange-500">ROUTER</span>
           <span className="blink text-orange-500">_</span>
         </h1>
+        <p className="font-[family-name:var(--font-pixel)] text-[10px] uppercase leading-relaxed text-orange-500/80">
+          stop paying frontier prices for every query
+        </p>
+
+        {/* the bots warming up — same auction animation shown before a query */}
+        <div className="text-left">
+          <BidArcade />
+        </div>
+
         <p className="text-sm text-stone-500">
           this demo is access-gated to protect API credits. enter the code you
           were given.
