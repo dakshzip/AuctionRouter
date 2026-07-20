@@ -7,7 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: mit
-short_description: Cost-aware multi-agent LLM router where cheap models bid on each query, a verifier gates the answer, and only hard STEM or reasoning problems escalate to a frontier model like GPT-5.
+short_description: Cost-aware multi-agent LLM router with auction
 ---
 
 # AuctionRouter
