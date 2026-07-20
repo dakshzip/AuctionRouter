@@ -479,6 +479,11 @@ _save_tasks: set[asyncio.Task] = set()
 
 
 def _save_run_bg(run: RunResult) -> None:
+    # Count this run's cost toward the daily spend ceiling (both query and
+    # stream paths persist here, so the guard sees every run)
+    from .security import spend_guard
+    spend_guard.add(run.total_cost_usd)
+
     task = asyncio.ensure_future(get_store().save_run(run))
     _save_tasks.add(task)
 

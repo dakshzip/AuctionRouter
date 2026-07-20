@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AccessGate } from "@/components/AccessGate";
 import { AuctionPanel } from "@/components/AuctionPanel";
 import { BidArcade } from "@/components/BidArcade";
 import { Chat } from "@/components/Chat";
 import { MetricsDashboard } from "@/components/MetricsDashboard";
 import { RoutingGraph } from "@/components/RoutingGraph";
 import { VerificationPanel } from "@/components/VerificationPanel";
+import { fetchHealth, getAccessCode, onAuthFailure } from "@/lib/api";
 import type { RunResult } from "@/lib/types";
 
 type Tab = "chat" | "metrics";
@@ -16,6 +18,33 @@ export default function Home() {
   const [selectedRun, setSelectedRun] = useState<RunResult | null>(null);
   const [runCount, setRunCount] = useState(0);
   const [sideOpen, setSideOpen] = useState(false);
+  // null until we've checked sessionStorage (avoids a gate flash on reload)
+  const [unlocked, setUnlocked] = useState<boolean | null>(null);
+  const [rejected, setRejected] = useState(false);
+
+  useEffect(() => {
+    // Skip the gate entirely when the backend has no access code (local dev)
+    fetchHealth()
+      .then((h) => setUnlocked(!h.access_required || !!getAccessCode()))
+      .catch(() => setUnlocked(!!getAccessCode()));
+    // A 401 mid-session (wrong/expired code) bounces back to the gate
+    onAuthFailure(() => {
+      setUnlocked(false);
+      setRejected(true);
+    });
+  }, []);
+
+  if (unlocked === null) return null;
+  if (!unlocked)
+    return (
+      <AccessGate
+        rejected={rejected}
+        onUnlock={() => {
+          setRejected(false);
+          setUnlocked(true);
+        }}
+      />
+    );
 
   return (
     <div className="mx-auto flex h-screen w-full flex-col px-6 py-4">

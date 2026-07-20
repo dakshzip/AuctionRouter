@@ -100,6 +100,20 @@ class Settings(BaseSettings):
     # empty string keeps OpenRouter's default (price)
     openrouter_provider_sort: str = "latency"
 
+    # --- Deployment / abuse protection --------------------------------------
+    # Shared access code required on every /api/* request (X-Access-Code
+    # header). Empty string disables the gate (local dev convenience).
+    access_code: str = ""
+    # Comma-separated browser origins allowed by CORS (localhost + the
+    # deployed frontend). NOT a security boundary — curl ignores CORS.
+    allowed_origins: str = "http://localhost:3000"
+    # Hard daily spend ceiling (USD, UTC day). Query endpoints 503 once
+    # exceeded. The credit-capped OpenRouter key is the true backstop.
+    daily_spend_limit_usd: float = 20.0
+    # Per-IP rate limits on the query endpoints
+    rate_limit_per_min: int = 15
+    rate_limit_per_day: int = 150
+
     mongodb_uri: str = ""          # empty -> in-memory store
     mongodb_db: str = "auctionrouter"
 

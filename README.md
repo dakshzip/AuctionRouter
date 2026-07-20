@@ -61,33 +61,66 @@ FRONTIER_MODEL_ID=deepseek/deepseek-r1 uv run python -m evals.run_evals
 FRONTIER_MODEL_ID=deepseek/deepseek-r1 uv run python -m evals.run_evals --mode frontier
 ```
 
-## Hosting (Hugging Face Spaces)
+## Deployment (Vercel frontend + Hugging Face backend)
 
-This repo is a single Docker Space: the multi-stage `Dockerfile` builds the
-Next.js frontend as a static export and FastAPI serves it alongside the API on
-port 7860.
+The frontend is a pure client-side SPA and the backend is a pure API, so they
+deploy independently: **Vercel** serves the UI, a **Hugging Face Docker Space**
+runs FastAPI. (The `Dockerfile` also bundles the UI, so the Space works
+standalone as a fallback.)
 
-### Deploy
+### Security model
 
-1. Create a **Docker** Space and push this repo to it:
+The API key is a server-side secret never sent to the browser — the threat is
+*abuse of the endpoints that spend it*. Defense in depth, worst case bounded
+by a number:
+
+1. **Credit-capped OpenRouter key** — create a dedicated key with a hard
+   credit limit (e.g. $20). Provider-enforced backstop; survives any app bug.
+2. **Daily spend guard** — `DAILY_SPEND_LIMIT_USD`; query endpoints return 503
+   once the day's total is exceeded (in-memory, resets on restart).
+3. **Access code** — every `/api/*` route requires the `X-Access-Code` header
+   (`ACCESS_CODE`); share the code with viewers. `/health` stays open.
+4. **Per-IP rate limiting** — `RATE_LIMIT_PER_MIN` / `_PER_DAY` on the query
+   endpoints (real IP read from `X-Forwarded-For`).
+5. **CORS** — `ALLOWED_ORIGINS` allowlist (browsers only; not a security
+   boundary — layers 1–4 are).
+
+Locking the access code also closes the run-history / metrics endpoints, which
+otherwise expose every visitor's queries and total spend.
+
+### Backend → Hugging Face Docker Space
+
+1. Create the credit-capped OpenRouter key.
+2. Push this repo to a **Docker** Space:
    ```bash
-   git remote add hf https://huggingface.co/spaces/<your-username>/AuctionRouter
-   git push hf master:main
+   git remote add hf https://huggingface.co/spaces/<user>/AuctionRouter
+   git push hf main:main
    ```
-2. In **Settings → Variables and secrets**, add:
-   - `OPENROUTER_API_KEY` (secret, required)
-   - `MONGODB_URI` (secret, optional — MongoDB Atlas M0; without it the app
-     uses an in-memory store that resets on restart)
-   - `MONGODB_DB` (variable, optional, default `auctionrouter`)
-   - `LANGCHAIN_TRACING_V2` / `LANGCHAIN_API_KEY` (optional, LangSmith)
-3. If using Atlas, allow `0.0.0.0/0` in its Network Access list — Space IPs
-   are not static.
+3. **Settings → Variables and secrets:**
+   - `OPENROUTER_API_KEY` (secret, the credit-capped key)
+   - `ACCESS_CODE` (secret, the shared demo code)
+   - `ALLOWED_ORIGINS` (variable, your Vercel URL, comma-separated with any others)
+   - `DAILY_SPEND_LIMIT_USD` (variable, e.g. `20`)
+   - `MONGODB_URI` / `MONGODB_DB` (secret/variable, optional — Atlas M0; without
+     it an in-memory store is used that resets on restart)
+   - `FRONTIER_MODEL_ID` (variable, optional, default `openai/gpt-5`)
+4. If using Atlas, allow `0.0.0.0/0` in its Network Access list (Space IPs
+   aren't static).
+5. Confirm `<space-url>/health` returns `openrouter_key_set: true`.
+
+### Frontend → Vercel
+
+1. Import `frontend/` as a Vercel project (auto-detected Next.js).
+2. Set env `NEXT_PUBLIC_API_BASE` = the HF Space URL. (Do **not** put the
+   access code here — it's entered at runtime.)
+3. Deploy, then add the Vercel domain to the Space's `ALLOWED_ORIGINS` and
+   redeploy the Space.
+4. Open the Vercel URL → enter the access code → run a query.
 
 Notes:
-- Spaces restart on every push and wipe local disk; persistent history needs
-  the Mongo URI.
-- CPU Basic hardware is sufficient (all inference happens on OpenRouter).
-  Pro-tier upgraded hardware avoids the ~48h inactivity sleep.
+- HF free tier sleeps after ~48h idle → first query cold-starts ~30s. HF Pro
+  or an always-on backend (Fly.io / Render, same Dockerfile) removes this.
+- CPU Basic is sufficient — all inference happens on OpenRouter.
 
 ## Local development
 
