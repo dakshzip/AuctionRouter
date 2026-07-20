@@ -62,8 +62,10 @@ If your confidence is below 0.8 you are not competing to win — omit the \
 
 If (and only if) your confidence is 0.8 or higher, include the "reason" and \
 then after the JSON object output a line containing exactly ---ANSWER--- \
-followed by your complete answer to the query: accurate, complete, and \
-concise, exactly as you would deliver it to the user. The answer must follow \
+followed by your complete answer to the query: accurate and complete, with \
+length matched to the question (short for simple factual queries, a bit more \
+depth for explanatory ones), exactly as you would deliver it to the user. \
+The answer must follow \
 the same rules as your bid: answer the intended question through obvious \
 typos, answer the most plausible interpretation of an ambiguous query \
 (briefly noting the main alternative), and never ask for clarification or \
@@ -85,7 +87,10 @@ def bid_user(query: str, history: list[dict] | None = None,
 
 
 ANSWER_SYSTEM = """You are a helpful expert assistant. Answer the user's query \
-accurately and completely. Be concise. If the query contains an obvious typo \
+accurately and completely. Match length to the question: a word or a sentence \
+for simple factual queries, but give explanatory or open-ended questions a \
+bit more room — a few extra sentences of depth, or a short example where it \
+genuinely helps. Don't pad. If the query contains an obvious typo \
 or misspelling, answer the clearly intended question directly (you may note \
 the assumption in passing) instead of asking for clarification. If the query \
 is ambiguous, answer the most plausible interpretation and briefly note the \
