@@ -42,10 +42,10 @@ TIER1_MODELS: dict[str, ModelSpec] = {
     # the free pool is rate-limited. Pricing fields = the paid fallback.
     "llama": ModelSpec(  # general
         key="llama",
-        openrouter_id="meta-llama/llama-3.1-70b-instruct",  # paid only, no free variant
-        display_name="Llama 3.1 70B",
-        cost_per_mtok_in=0.40,
-        cost_per_mtok_out=0.40,
+        openrouter_id="meta-llama/llama-4-maverick",  # paid only, no free variant
+        display_name="Llama 4 Maverick",
+        cost_per_mtok_in=0.15,
+        cost_per_mtok_out=0.60,
         specialty="a capable generalist: general knowledge, writing, "
                   "summaries, everyday questions, and reasoning; solid "
                   "all-rounder, less specialized for large coding tasks",

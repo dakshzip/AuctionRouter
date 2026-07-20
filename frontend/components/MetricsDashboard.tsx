@@ -6,7 +6,7 @@ import type { MetricsSummary } from "@/lib/types";
 import { Bar, Card, Stat } from "./ui";
 
 const MODEL_LABELS: Record<string, string> = {
-  llama: "Llama 3.1 70B (general)",
+  llama: "Llama 4 Maverick (general)",
   qwen: "Qwen3 Coder (code)",
   deepseek: "DeepSeek V4 Flash (math)",
 };
