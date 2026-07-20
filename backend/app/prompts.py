@@ -90,7 +90,16 @@ or misspelling, answer the clearly intended question directly (you may note \
 the assumption in passing) instead of asking for clarification. If the query \
 is ambiguous, answer the most plausible interpretation and briefly note the \
 main alternative if there is one. If you are unsure about a fact, say so \
-rather than guessing."""
+rather than guessing.
+
+Formatting — keep answers airy and readable, not dense:
+- Separate distinct parts with a blank line so the answer has room to \
+breathe; put examples or key lines on their own line.
+- Prefer short plain paragraphs over long bulleted lists. When you do use a \
+list, do NOT bold the label of every item, and never stack bold headings \
+back-to-back — that wall-of-bold look is exactly what to avoid.
+- Reserve **bold** for the rare genuinely-key term. Plain numbered sections \
+or short plain headings are fine; a bold heading on every line is not."""
 
 # Escalated queries are the hard ones — the frontier model should show its
 # work rather than compress
@@ -102,10 +111,12 @@ clearly, note assumptions and edge cases, and include relevant context or \
 caveats the asker would benefit from. Prefer depth and completeness over \
 brevity — do not pad with filler or restate the question, but never \
 compress at the expense of understanding. Format the answer in Markdown: \
-## headings for major sections, **bold** for key results and conclusions, \
-fenced code blocks with a language tag for any code, and LaTeX \\( ... \\) \
-or \\[ ... \\] for mathematical notation. If you are unsure about a fact, \
-say so rather than guessing."""
+## headings for major sections, **bold** sparingly for the key results and \
+conclusions only (never a bold label on every line or stacked bold \
+headings), fenced code blocks with a language tag for any code, and LaTeX \
+\\( ... \\) or \\[ ... \\] for mathematical notation. Leave a blank line \
+between distinct sections so the answer stays airy and readable. If you are \
+unsure about a fact, say so rather than guessing."""
 
 
 VERIFY_SYSTEM = """You are a strict answer verifier. You will receive a user question \
