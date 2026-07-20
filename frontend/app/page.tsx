@@ -47,9 +47,9 @@ export default function Home() {
     );
 
   return (
-    <div className="mx-auto flex h-screen w-full flex-col px-6 py-4">
-      <header className="mb-4 flex items-center justify-between px-1 py-2">
-        <h1 className="crt font-[family-name:var(--font-pixel)] text-2xl tracking-tight text-stone-200">
+    <div className="mx-auto flex h-dvh w-full flex-col px-3 py-3 sm:px-6 sm:py-4">
+      <header className="mb-3 flex items-center justify-between gap-2 px-1 py-1 sm:mb-4 sm:py-2">
+        <h1 className="crt font-[family-name:var(--font-pixel)] text-base tracking-tight text-stone-200 sm:text-2xl">
           AUCTION
           <span className="glow-pulse text-orange-500">ROUTER</span>
           <span className="blink text-orange-500">_</span>
@@ -59,7 +59,7 @@ export default function Home() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`border-2 px-4 py-2 font-[family-name:var(--font-pixel)] text-[12px] uppercase ${
+              className={`border-2 px-2.5 py-1.5 font-[family-name:var(--font-pixel)] text-[10px] uppercase sm:px-4 sm:py-2 sm:text-[12px] ${
                 tab === t
                   ? "glow-text border-orange-500 bg-orange-950 text-orange-400 shadow-[3px_3px_0_0_#7c2d12]"
                   : "border-stone-700 bg-stone-950 text-stone-500 hover:border-stone-500 hover:text-stone-300"
@@ -78,7 +78,11 @@ export default function Home() {
           tab === "chat" ? "flex" : "hidden"
         }`}
       >
-        <section className="min-h-0 min-w-0 flex-1">
+        {/* On mobile the sidebar takes over the row, so hide the chat when
+            it's open; both show side by side from sm up */}
+        <section
+          className={`min-h-0 min-w-0 flex-1 ${sideOpen ? "hidden sm:block" : ""}`}
+        >
           <Chat
             onRun={(run) => {
               setSelectedRun(run);
@@ -100,7 +104,7 @@ export default function Home() {
           {sideOpen ? "▶" : "◀"}
         </button>
         {sideOpen && (
-          <aside className="min-h-0 w-[360px] shrink-0 space-y-4 overflow-y-auto pb-2 pr-1">
+          <aside className="min-h-0 w-full shrink-0 space-y-4 overflow-y-auto pb-2 pr-1 sm:w-[360px]">
             {selectedRun ? (
               <>
                 <RoutingGraph run={selectedRun} />

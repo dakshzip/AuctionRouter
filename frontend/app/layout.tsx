@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Press_Start_2P } from "next/font/google";
 import "./globals.css";
 
@@ -14,6 +14,11 @@ export const metadata: Metadata = {
   title: "AuctionRouter",
   description:
     "Cost-aware multi-agent LLM orchestrator with auction-based routing and verification-based escalation",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

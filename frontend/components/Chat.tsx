@@ -332,7 +332,7 @@ export function Chat({
         <div ref={bottomRef} />
       </div>
 
-      <div className="mt-3 flex items-center gap-1.5">
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <span className="mr-1 font-[family-name:var(--font-pixel)] text-[10px] uppercase text-stone-600">
           topic
         </span>
