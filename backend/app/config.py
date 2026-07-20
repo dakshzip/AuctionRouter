@@ -40,17 +40,17 @@ class ModelSpec:
 TIER1_MODELS: dict[str, ModelSpec] = {
     # Bidders/verifier run free-first with an automatic paid fallback when
     # the free pool is rate-limited. Pricing fields = the paid fallback.
-    "nemotron": ModelSpec(
-        key="nemotron",
-        openrouter_id="nvidia/nemotron-3-ultra-550b-a55b:free",
-        fallback_id="nvidia/nemotron-3-ultra-550b-a55b",
-        display_name="Nemotron 3 Ultra",
-        cost_per_mtok_in=0.60,
-        cost_per_mtok_out=3.60,
-        specialty="a powerful large generalist: strong at general knowledge, "
-                  "writing, summaries, everyday questions, and multi-step "
-                  "reasoning; competent at code but defer large or subtle "
-                  "coding tasks to the code specialist",
+    "deepseek_v4": ModelSpec(
+        key="deepseek_v4",
+        # plain deepseek/deepseek-v4 isn't a callable id; the full (non-Flash)
+        # V4 is the Pro variant. Paid only.
+        openrouter_id="deepseek/deepseek-v4-pro",
+        display_name="DeepSeek V4 Pro",
+        cost_per_mtok_in=0.435,
+        cost_per_mtok_out=0.87,
+        specialty="a strong general-purpose model: general knowledge, "
+                  "writing, summaries, everyday questions, and broad "
+                  "reasoning; capable across domains",
     ),
     "deepseek": ModelSpec(
         key="deepseek",
@@ -63,24 +63,24 @@ TIER1_MODELS: dict[str, ModelSpec] = {
                   "quantitative problems; solid at code; average at niche "
                   "world knowledge",
     ),
-    "qwen": ModelSpec(
-        key="qwen",
-        openrouter_id="qwen/qwen3-coder:free",
-        fallback_id="qwen/qwen3-coder",
-        display_name="Qwen3 Coder",
-        cost_per_mtok_in=0.22,
-        cost_per_mtok_out=1.80,
-        specialty="a coding specialist: strongest at writing, debugging, and "
-                  "explaining code and software architecture; weaker at "
-                  "non-technical general knowledge",
+    "nemotron": ModelSpec(
+        key="nemotron",
+        openrouter_id="nvidia/nemotron-3-ultra-550b-a55b:free",
+        fallback_id="nvidia/nemotron-3-ultra-550b-a55b",
+        display_name="Nemotron 3 Ultra",
+        cost_per_mtok_in=0.60,
+        cost_per_mtok_out=3.60,
+        specialty="a large capable model handling code, debugging, software "
+                  "architecture, and technical reasoning; strong at working "
+                  "through programming problems step by step",
     ),
 }
 
 # Topic toggle -> which tier-1 model drafts speculatively during bidding.
 # If the auction then picks that model, its draft is already in flight.
 SPECULATIVE_HINT_MODELS: dict[str, str] = {
-    "general": "nemotron",
-    "coding": "qwen",
+    "general": "deepseek_v4",
+    "coding": "nemotron",
     "reasoning": "deepseek",
 }
 

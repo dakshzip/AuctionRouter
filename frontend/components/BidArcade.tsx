@@ -6,9 +6,9 @@ import { useEffect, useState } from "react";
 // Pure CSS pixel art — each sprite is a grid of colored cells.
 
 const BOTS = [
-  { name: "NEMOTRON", color: "#fb923c", dark: "#9a3412" },
-  { name: "DEEPSEEK", color: "#38bdf8", dark: "#075985" },
-  { name: "QWEN-CODER", color: "#a3e635", dark: "#3f6212" },
+  { name: "DEEPSEEK-PRO", color: "#38bdf8", dark: "#075985" },
+  { name: "V4-FLASH", color: "#fb923c", dark: "#9a3412" },
+  { name: "NEMOTRON", color: "#a3e635", dark: "#3f6212" },
 ];
 
 // 8x8 robot sprite: 0 empty, 1 body, 2 eye, 3 antenna
