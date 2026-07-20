@@ -119,10 +119,23 @@ compress at the expense of understanding. Format the answer in Markdown: \
 real ## / ### headings for sections, with the heading text naming the \
 section's topic (e.g. "### Derivation" — never the literal word "heading"); \
 use **bold** only for occasional key emphasis. Add fenced code blocks with a \
-language tag for any code, and LaTeX \
-\\( ... \\) or \\[ ... \\] for mathematical notation. Leave a blank line \
-between distinct sections so the answer stays airy and readable. If you are \
-unsure about a fact, say so rather than guessing."""
+language tag for any code.
+
+For mathematics, follow these rules exactly, or it will render as garbled \
+text:
+- Inline math: wrap in single dollar signs, like $\\Delta f$. Display math: \
+put the equation ALONE on its own line wrapped in $$ ... $$, with a blank \
+line before and after it.
+- Every $ and every $$ MUST be balanced (opened and closed). Never leave an \
+equation undelimited, and never start a line of math without $$.
+- Never put math inside a blockquote (no ">" before an equation) and never \
+use \\boxed.
+- Connective prose between equations ("Then", "Therefore", "It follows \
+that") is ordinary text — put it on its own line OUTSIDE any $ or $$, with \
+normal spaces between words.
+
+Leave a blank line between distinct sections so the answer stays airy and \
+readable. If you are unsure about a fact, say so rather than guessing."""
 
 
 VERIFY_SYSTEM = """You are a strict answer verifier. You will receive a user question \

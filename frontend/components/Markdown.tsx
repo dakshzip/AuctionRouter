@@ -9,6 +9,12 @@ import "katex/dist/katex.min.css";
 // Same scheme ChatGPT uses for code blocks
 import "highlight.js/styles/atom-one-dark.min.css";
 
+// Forgiving KaTeX: render malformed math in place rather than crashing.
+const katexPlugin: [typeof rehypeKatex, Record<string, unknown>] = [
+  rehypeKatex,
+  { throwOnError: false, strict: false },
+];
+
 // LLMs emit LaTeX as \(...\) / \[...\] but remark-math only parses $...$ /
 // $$...$$, so normalize before rendering.
 function normalizeMath(text: string): string {
@@ -31,9 +37,11 @@ export function Markdown({
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={
+          // throwOnError:false + strict:false → malformed LaTeX renders in
+          // place (error color) instead of cascading into garbled text
           highlight
-            ? [rehypeKatex, [rehypeHighlight, { detect: true }]]
-            : [rehypeKatex]
+            ? [katexPlugin, [rehypeHighlight, { detect: true }]]
+            : [katexPlugin]
         }
       >
         {normalizeMath(children)}
