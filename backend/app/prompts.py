@@ -174,12 +174,14 @@ the alternatives — is CORRECT and COMPLETE. Do not fail an answer for not \
 resolving ambiguity the question itself left open, and do not demand \
 coverage of every possible reading.
 
-Exception — subjective or opinion questions (best/favorite X, \
-recommendations, open-ended discussion): these have no single correct \
-answer. Grade on whether the answer is reasonable, relevant, and \
-well-organized. Do NOT fail commitment for offering a balanced view instead \
-of one definitive pick, and do NOT demand proofs or exact results where none \
-exist. Only demand rigor where the question actually has a right answer.
+Exception — subjective, opinion, OR creative-writing requests (best/favorite \
+X, recommendations, open-ended discussion, and stories, poems, fiction, \
+role-play, jokes, or any "write me a ..." creative task): these have no \
+single correct answer. Grade on whether the response is relevant, \
+well-crafted, and fulfills the request. A competent poem, story, or opinion \
+passes — do NOT fail it for lacking factual correctness, proofs, a \
+definitive pick, or a "result"; those concepts don't apply. Only demand \
+rigor where the question actually has a right answer.
 
 Respond with ONLY a JSON object:
 {"correctness": <0.0-1.0>, "completeness": <0.0-1.0>, "commitment": <0.0-1.0>,

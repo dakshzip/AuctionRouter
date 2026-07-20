@@ -79,7 +79,7 @@ export interface StreamEvent {
   run?: RunResult;
 }
 
-export type QueryHint = "general" | "coding" | "reasoning";
+export type QueryHint = "general" | "coding" | "creative";
 
 // POST + NDJSON reader (EventSource is GET-only)
 export async function streamQuery(

@@ -6,9 +6,9 @@ import type { MetricsSummary } from "@/lib/types";
 import { Bar, Card, Stat } from "./ui";
 
 const MODEL_LABELS: Record<string, string> = {
-  llama: "Llama 4 Maverick (general)",
+  deepseek: "DeepSeek V4 Flash (general)",
   qwen: "Qwen3 Coder (code)",
-  deepseek: "DeepSeek V4 Flash (math)",
+  skyfall: "Skyfall 36B V2 (creative)",
 };
 
 export function MetricsDashboard({ refreshKey }: { refreshKey: number }) {

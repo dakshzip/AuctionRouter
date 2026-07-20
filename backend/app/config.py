@@ -40,15 +40,16 @@ class ModelSpec:
 TIER1_MODELS: dict[str, ModelSpec] = {
     # Bidders/verifier run free-first with an automatic paid fallback when
     # the free pool is rate-limited. Pricing fields = the paid fallback.
-    "llama": ModelSpec(  # general
-        key="llama",
-        openrouter_id="meta-llama/llama-4-maverick",  # paid only, no free variant
-        display_name="Llama 4 Maverick",
-        cost_per_mtok_in=0.15,
-        cost_per_mtok_out=0.60,
-        specialty="a capable generalist: general knowledge, writing, "
+    "deepseek": ModelSpec(  # general
+        key="deepseek",
+        openrouter_id="deepseek/deepseek-v4-flash:free",
+        fallback_id="deepseek/deepseek-v4-flash",
+        display_name="DeepSeek V4 Flash",
+        cost_per_mtok_in=0.09,
+        cost_per_mtok_out=0.18,
+        specialty="a fast, capable generalist: general knowledge, writing, "
                   "summaries, everyday questions, and reasoning; solid "
-                  "all-rounder, less specialized for large coding tasks",
+                  "all-rounder across most topics",
     ),
     "qwen": ModelSpec(  # coding
         key="qwen",
@@ -61,25 +62,24 @@ TIER1_MODELS: dict[str, ModelSpec] = {
                   "explaining code and software architecture; weaker at "
                   "non-technical general knowledge",
     ),
-    "deepseek": ModelSpec(  # math / reasoning
-        key="deepseek",
-        openrouter_id="deepseek/deepseek-v4-flash:free",
-        fallback_id="deepseek/deepseek-v4-flash",
-        display_name="DeepSeek V4 Flash",
-        cost_per_mtok_in=0.09,
-        cost_per_mtok_out=0.18,
-        specialty="strongest at mathematical reasoning, logic puzzles, and "
-                  "quantitative problems; solid at code; average at niche "
-                  "world knowledge",
+    "skyfall": ModelSpec(  # creative
+        key="skyfall",
+        openrouter_id="thedrummer/skyfall-36b-v2",  # paid only, no free variant
+        display_name="Skyfall 36B V2",
+        cost_per_mtok_in=0.55,
+        cost_per_mtok_out=0.80,
+        specialty="a creative-writing specialist: storytelling, fiction, "
+                  "role-play, poetry, dialogue, and nuanced expressive prose; "
+                  "less suited to factual precision, hard math, or code",
     ),
 }
 
 # Topic toggle -> which tier-1 model drafts speculatively during bidding.
 # If the auction then picks that model, its draft is already in flight.
 SPECULATIVE_HINT_MODELS: dict[str, str] = {
-    "general": "llama",
+    "general": "deepseek",
     "coding": "qwen",
-    "reasoning": "deepseek",
+    "creative": "skyfall",
 }
 
 # --- Verifier ---------------------------------------------------------------
