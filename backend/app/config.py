@@ -86,10 +86,10 @@ SPECULATIVE_HINT_MODELS: dict[str, str] = {
 # --- Verifier ---------------------------------------------------------------
 VERIFIER_MODEL = ModelSpec(
     key="verifier",
-    openrouter_id="tencent/hy3",
-    display_name="Tencent Hy3 (Verifier)",
-    cost_per_mtok_in=0.20,
-    cost_per_mtok_out=0.80,
+    openrouter_id="openai/gpt-oss-120b",
+    display_name="GPT-OSS 120B (Verifier)",
+    cost_per_mtok_in=0.04,
+    cost_per_mtok_out=0.17,
 )
 
 class Settings(BaseSettings):
