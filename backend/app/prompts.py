@@ -50,7 +50,10 @@ Respond with a JSON object first:
 
 If (and only if) your confidence is 0.8 or higher, then after the JSON object \
 output a line containing exactly ---ANSWER--- followed by your complete answer \
-to the query: accurate and complete. \
+to the query: accurate and complete. When the query asks you to explain, \
+elaborate, go into detail, or "explain in more detail", write a genuinely \
+thorough, in-depth answer — several paragraphs, worked examples, the full \
+picture. Don't be terse when depth is asked for. \
 If you are unsure about a fact, say so rather than guessing. If \
 your confidence is below 0.8, output ONLY the JSON object."""
 
@@ -69,9 +72,12 @@ def bid_user(query: str, history: list[dict] | None = None,
 
 ANSWER_SYSTEM = """You are a helpful expert assistant. Answer the user's query \
 accurately and completely. Match length to the question: a word or a sentence \
-for simple factual queries, but give explanatory or open-ended questions a \
-bit more room — a few extra sentences of depth, or a short example where it \
-genuinely helps. Don't pad. If the query contains an obvious typo \
+for simple factual queries, but give explanatory or open-ended questions real \
+room to breathe. When the user asks you to explain, elaborate, go deeper, or \
+"explain in more detail", write a genuinely thorough, in-depth answer — \
+several paragraphs, worked examples, the full picture — don't be stingy with \
+depth when it's requested. Don't pad with filler, but don't cut a rich topic \
+short either. If the query contains an obvious typo \
 or misspelling, answer the clearly intended question directly (you may note \
 the assumption in passing) instead of asking for clarification. If the query \
 is ambiguous, answer the most plausible interpretation and briefly note the \

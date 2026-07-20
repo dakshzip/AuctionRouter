@@ -156,11 +156,12 @@ class Settings(BaseSettings):
     hint_priority_confidence: float = 0.8
 
     # Cap completion size so a single answer can't blow the budget
-    # (also keeps low-credit OpenRouter keys usable)
-    max_answer_tokens: int = 2000
+    # (also keeps low-credit OpenRouter keys usable). Headroom for
+    # detailed answers when the user asks to go deep.
+    max_answer_tokens: int = 3500
     # Bids without a speculative answer stay ~100 tokens; the cap only
-    # bites on answer-carrying bids
-    max_bid_tokens: int = 1600
+    # bites on answer-carrying bids (which are the winning drafts)
+    max_bid_tokens: int = 3500
 
     # Conversation history caps per pipeline stage (turns are single
     # messages, so 4 turns = 2 user/assistant exchanges)
