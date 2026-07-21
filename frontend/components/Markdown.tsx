@@ -71,7 +71,13 @@ export function Markdown({
             ? [katexPlugin, [rehypeHighlight, { detect: true }]]
             : [katexPlugin]
         }
-        components={{ pre: PreBlock }}
+        components={{
+          pre: PreBlock,
+          // Links (incl. web-search citations) open in a new tab
+          a: (props) => (
+            <a {...props} target="_blank" rel="noopener noreferrer" />
+          ),
+        }}
       >
         {normalizeMath(children)}
       </ReactMarkdown>
