@@ -59,10 +59,10 @@ export default function Home() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`border-2 px-2.5 py-1.5 font-[family-name:var(--font-pixel)] text-[10px] uppercase sm:px-4 sm:py-2 sm:text-[12px] ${
+              className={`rounded px-2.5 py-1.5 font-[family-name:var(--font-pixel)] text-[10px] uppercase sm:px-4 sm:py-2 sm:text-[12px] ${
                 tab === t
-                  ? "glow-text border-orange-500 bg-orange-950 text-orange-400 shadow-[3px_3px_0_0_#7c2d12]"
-                  : "border-stone-700 bg-stone-950 text-stone-500 hover:border-stone-500 hover:text-stone-300"
+                  ? "glow-text bg-orange-950 text-orange-400"
+                  : "bg-stone-900 text-stone-500 hover:text-stone-300"
               }`}
             >
               {tab === t ? `▶ ${t}` : t}

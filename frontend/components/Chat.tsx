@@ -425,10 +425,10 @@ export function Chat({
           <button
             key={value}
             onClick={() => setHint(value)}
-            className={`border px-2 py-0.5 font-[family-name:var(--font-pixel)] text-[10px] uppercase ${
+            className={`rounded px-2 py-0.5 font-[family-name:var(--font-pixel)] text-[10px] uppercase ${
               hint === value
-                ? "border-orange-500 bg-orange-950 text-orange-400"
-                : "border-stone-700 bg-stone-950 text-stone-500 hover:border-stone-500 hover:text-stone-300"
+                ? "bg-orange-950 text-orange-400"
+                : "bg-stone-900 text-stone-500 hover:text-stone-300"
             }`}
             title="picks which model pre-drafts your answer during the auction"
           >
