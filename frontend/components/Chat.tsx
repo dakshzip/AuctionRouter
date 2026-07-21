@@ -331,7 +331,7 @@ export function Chat({
         {messages.map((msg, i) =>
           msg.role === "user" ? (
             <div key={i} className="flex justify-end">
-              <div className="max-w-[90%] bg-orange-950/60 px-3 py-2 text-orange-100">
+              <div className="max-w-[90%] rounded-full bg-orange-950/60 px-4 py-2 text-orange-100">
                 <span className="mr-1 text-orange-500">&gt;</span>
                 {msg.text}
               </div>
