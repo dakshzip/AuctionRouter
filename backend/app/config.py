@@ -156,7 +156,11 @@ class Settings(BaseSettings):
     default_historical_accuracy: float = 0.70
 
     request_timeout_s: float = 60.0
-    bid_timeout_s: float = 20.0
+    # Wait this long for bidders. Longer than it sounds like it should be:
+    # when the hint model (e.g. the math specialist) is slow on a matching
+    # query, waiting for its confident bid is far better than giving up and
+    # escalating to the expensive frontier.
+    bid_timeout_s: float = 30.0
 
     # Bidders at or above this confidence append a speculative answer to
     # their bid, letting the pipeline skip the separate draft round-trip

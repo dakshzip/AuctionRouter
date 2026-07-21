@@ -274,7 +274,7 @@ export function Chat({
             <div key={i} className="flex justify-start">
               <div
                 onClick={() => msg.run && onSelectRun(msg.run)}
-                className={`max-w-[80%] cursor-pointer select-text px-3 py-2 text-left ${
+                className={`max-w-[68%] cursor-pointer select-text px-3 py-2 text-left ${
                   msg.run && msg.run.id === selectedRunId
                     ? "shadow-[inset_3px_0_0_0_#f97316]"
                     : "hover:shadow-[inset_3px_0_0_0_#57534e]"
@@ -301,7 +301,7 @@ export function Chat({
         {live && (
           <div className="flex justify-start">
             <div
-              className={`max-w-[80%] px-3 py-2 ${
+              className={`max-w-[68%] px-3 py-2 ${
                 live.escalating ? "bg-orange-950/20" : ""
               }`}
             >
@@ -369,7 +369,7 @@ export function Chat({
           }}
           rows={2}
           placeholder="> type your query… (phd level stem questions trigger frontier)"
-          className="flex-1 resize-none border-2 border-stone-700 bg-black px-3 py-2 text-stone-200 outline-none placeholder:text-stone-600 focus:border-orange-500"
+          className="flex-1 resize-none rounded-xl border-2 border-stone-700 bg-black px-4 py-2 text-stone-200 outline-none placeholder:text-stone-600 focus:border-orange-500"
         />
         <button
           onClick={send}
