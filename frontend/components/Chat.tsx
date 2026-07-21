@@ -411,7 +411,7 @@ export function Chat({
         <div ref={bottomRef} />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-4">
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-4">
         {(
           [
             ["general", "general"],
@@ -433,7 +433,7 @@ export function Chat({
           </button>
         ))}
       </div>
-      <div className="mt-2 flex gap-3">
+      <div className="mt-4 flex gap-3">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
