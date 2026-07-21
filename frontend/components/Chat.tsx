@@ -16,6 +16,7 @@ interface LiveState {
   status: string;
   text: string;
   escalating: boolean;
+  searching: boolean;
   // Draft text streams before the verifier has judged it
   provisional: boolean;
   // Tail of GPT-5's streamed reasoning summary, when the provider sends one
@@ -45,6 +46,16 @@ const BOSS_THOUGHTS = [
   "charging special attack…",
   "questioning the premise…",
   "aligning brain cells…",
+];
+
+// Rotating ticker while the web search runs (no live text yet)
+const SEARCH_PHRASES = [
+  "searching the web…",
+  "reading results…",
+  "cross-referencing sources…",
+  "checking the latest…",
+  "following the citations…",
+  "gathering fresh intel…",
 ];
 
 export function Chat({
@@ -89,14 +100,16 @@ export function Chat({
     return () => clearInterval(id);
   }, [streaming]);
 
-  // Rotate the boss-thought phrases while GPT-5 thinks silently
+  // Rotate the boss-thought / search-phrase tickers while there's no text yet
   const bossThinking = !!live?.escalating && !live.text;
+  const searchingActive = !!live?.searching && !live.text;
+  const ticking = bossThinking || searchingActive;
   useEffect(() => {
-    if (!bossThinking) return;
-    setTick(0); // every boss fight opens on BOSS_THOUGHTS[0]
+    if (!ticking) return;
+    setTick(0); // open on the first phrase
     const id = setInterval(() => setTick((t) => t + 1), 2200);
     return () => clearInterval(id);
-  }, [bossThinking]);
+  }, [ticking]);
 
   // One condensed reasoning headline at a time, swapped every ~7.5s —
   // raw reasoning streams far too fast to read
@@ -132,6 +145,7 @@ export function Chat({
       status: "⚡ AUCTION IN PROGRESS…",
       text: "",
       escalating: false,
+      searching: false,
       // Hedge tokens stream during the auction, before any verdict
       provisional: true,
       thinking: "",
@@ -149,7 +163,12 @@ export function Chat({
               );
             else if (ev.stage === "searching")
               setLive((l) =>
-                l && { ...l, status: `🔍 ${ev.model} SEARCHING THE WEB…`, provisional: true },
+                l && {
+                  ...l,
+                  status: "🔍 SEARCHING THE WEB…",
+                  searching: true,
+                  provisional: true,
+                },
               );
             else if (ev.stage === "verifying")
               setLive((l) => l && { ...l, status: "🔍 VERIFIER JUDGING…" });
@@ -172,6 +191,7 @@ export function Chat({
                 status: `⚔ BOSS FIGHT: ${ev.model}…`,
                 text: "",
                 escalating: true,
+                searching: false,
                 provisional: false,
                 thinking: "",
               });
@@ -299,6 +319,11 @@ export function Chat({
                   {live.thinking
                     ? `${live.thinking}…`
                     : BOSS_THOUGHTS[tick % BOSS_THOUGHTS.length]}
+                </div>
+              )}
+              {searchingActive && (
+                <div className="max-w-full truncate font-mono text-xs italic text-stone-500">
+                  {SEARCH_PHRASES[tick % SEARCH_PHRASES.length]}
                 </div>
               )}
               {live.text && (
