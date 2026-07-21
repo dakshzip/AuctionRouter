@@ -58,9 +58,13 @@ TIER1_MODELS: dict[str, ModelSpec] = {
         display_name="Qwen3 Coder",
         cost_per_mtok_in=0.22,
         cost_per_mtok_out=1.80,
-        specialty="a coding specialist: strongest at writing, debugging, and "
-                  "explaining code and software architecture; weaker at "
-                  "non-technical general knowledge",
+        specialty="a CODING-ONLY specialist. Bid 0.9+ only on programming, "
+                  "debugging, code review, or software-architecture "
+                  "questions. For anything non-technical — general "
+                  "knowledge, facts, writing, advice, everyday questions — "
+                  "bid 0.4 or lower and defer to the generalist, EVEN IF you "
+                  "could answer it. Code is your only lane; do not compete "
+                  "outside it",
     ),
     "skyfall": ModelSpec(  # creative
         key="skyfall",
