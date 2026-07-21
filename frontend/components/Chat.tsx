@@ -58,13 +58,14 @@ const SEARCH_PHRASES = [
   "gathering fresh intel…",
 ];
 
-// Loading-screen tips shown while the auction runs
-const TIPS = [
-  "tip: type /explain to see exactly how the auction works",
-  "tip: use the general / coding / logic-math toggle to hint the router",
-  "tip: ask about current events — it searches the web automatically",
-  "tip: only genuinely hard STEM questions summon the frontier model",
-  "tip: click any answer to inspect its bids and verifier score",
+// Rotating input-box placeholders. Index 0 is always the opening greeting.
+const PLACEHOLDERS = [
+  "> hey there — ask me anything…",
+  "> tip: type /explain to see how the auction works",
+  "> tip: use the general / coding / logic-math toggle",
+  "> tip: ask about current events — it searches the web",
+  "> tip: hard STEM questions summon the frontier model",
+  "> tip: click any answer to inspect its bids & score",
 ];
 
 // Prewritten answer for the /explain command (rendered as Markdown)
@@ -108,9 +109,8 @@ export function Chat({
   const [live, setLive] = useState<LiveState | null>(null);
   const [hint, setHint] = useState<QueryHint>("general");
   const [tick, setTick] = useState(0);
-  // Tips linger ~10s into a query (even as the answer streams), then go
-  const [tipsOn, setTipsOn] = useState(false);
-  const tipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Input-box placeholder rotates every 10s; starts on the greeting (idx 0)
+  const [phIdx, setPhIdx] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   // Streamed text lands here and is animated out at a steady rate —
   // network chunks are bursty; the typewriter effect is client-side
@@ -139,18 +139,33 @@ export function Chat({
     return () => clearInterval(id);
   }, [streaming]);
 
-  // Boss / search tickers show only before any text; tips linger ~10s into
-  // the query (via tipsOn) even while the answer is streaming.
+  // Boss / search tickers show only before any answer text
   const bossThinking = !!live?.escalating && !live.text;
   const searchingActive = !!live?.searching && !live.text;
-  const showTip = !!live && tipsOn && !bossThinking && !searchingActive;
-  const tickerOn = bossThinking || searchingActive || showTip;
+  const tickerOn = bossThinking || searchingActive;
   useEffect(() => {
     if (!tickerOn) return;
     setTick(0);
-    const id = setInterval(() => setTick((t) => t + 1), 2600);
-    return () => clearInterval(id);
+    // Hold the opener (e.g. "someone called the boss??") ~7s, then rotate
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const hold = setTimeout(() => {
+      setTick(1);
+      interval = setInterval(() => setTick((t) => t + 1), 2200);
+    }, 7000);
+    return () => {
+      clearTimeout(hold);
+      if (interval) clearInterval(interval);
+    };
   }, [tickerOn]);
+
+  // Cycle the input-box placeholder every 10s
+  useEffect(() => {
+    const id = setInterval(
+      () => setPhIdx((i) => (i + 1) % PLACEHOLDERS.length),
+      10000,
+    );
+    return () => clearInterval(id);
+  }, []);
 
   // One condensed reasoning headline at a time, swapped every ~7.5s —
   // raw reasoning streams far too fast to read
@@ -202,10 +217,6 @@ export function Chat({
       provisional: true,
       thinking: "",
     });
-    // Keep tips up for ~10s into the query, then let them fade
-    if (tipTimer.current) clearTimeout(tipTimer.current);
-    setTipsOn(true);
-    tipTimer.current = setTimeout(() => setTipsOn(false), 10000);
     scroll();
     try {
       await streamQuery(query, history, hint, (ev) => {
@@ -302,7 +313,7 @@ export function Chat({
       <div className="flex-1 space-y-4 overflow-y-auto pr-2">
         {messages.length === 0 && !live && (
           <div className="flex h-full items-center justify-center">
-            <div className="max-w-md px-5 text-center text-2xl text-stone-400">
+            <div className="max-w-md px-5 text-center font-[family-name:var(--font-pixel)] text-sm leading-relaxed text-stone-300">
               No limits to curiosity. Ask anything.
             </div>
           </div>
@@ -379,11 +390,6 @@ export function Chat({
                   {SEARCH_PHRASES[tick % SEARCH_PHRASES.length]}
                 </div>
               )}
-              {showTip && (
-                <div className="max-w-full font-mono text-xs italic text-stone-500">
-                  {TIPS[tick % TIPS.length]}
-                </div>
-              )}
               {live.text && (
                 <div className="text-stone-200">
                   <Markdown highlight={false}>{live.text}</Markdown>
@@ -431,7 +437,7 @@ export function Chat({
             }
           }}
           rows={2}
-          placeholder="> type your query… (phd level stem questions trigger frontier)"
+          placeholder={PLACEHOLDERS[phIdx]}
           className="flex-1 resize-none rounded-3xl border-2 border-stone-700 bg-black px-5 py-2 text-stone-200 outline-none placeholder:text-stone-600 focus:border-orange-500"
         />
         <button
