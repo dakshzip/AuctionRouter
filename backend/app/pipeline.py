@@ -276,7 +276,8 @@ async def verify(state: RouterState) -> RouterState:
     try:
         resp = await chat(VERIFIER_MODEL, prompts.VERIFY_SYSTEM,
                           prompts.verify_user(state["query"], state["draft_answer"],
-                                              state.get("history")),
+                                              state.get("history"),
+                                              web_used=state.get("needs_web", False)),
                           reasoning_effort=settings.verifier_reasoning_effort)
         data = extract_json(resp.content)
         score = _clamp(data.get("score", 0))
@@ -674,7 +675,12 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                 yield {"type": "token", "text": state["draft_answer"]}
                 state.update(await verify_task)
         else:
-            yield {"type": "stage", "stage": "drafting", "model": spec.display_name}
+            if state.get("needs_web"):
+                yield {"type": "stage", "stage": "searching",
+                       "model": spec.display_name}
+            else:
+                yield {"type": "stage", "stage": "drafting",
+                       "model": spec.display_name}
             try:
                 resp = None
                 async for ev in chat_stream(spec, prompts.ANSWER_SYSTEM, query,

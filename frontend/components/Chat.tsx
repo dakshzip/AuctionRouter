@@ -147,6 +147,10 @@ export function Chat({
               setLive((l) =>
                 l && { ...l, status: `✍ ${ev.model} DRAFTING…`, provisional: true },
               );
+            else if (ev.stage === "searching")
+              setLive((l) =>
+                l && { ...l, status: `🔍 ${ev.model} SEARCHING THE WEB…`, provisional: true },
+              );
             else if (ev.stage === "verifying")
               setLive((l) => l && { ...l, status: "🔍 VERIFIER JUDGING…" });
             else if (ev.stage === "delivering")

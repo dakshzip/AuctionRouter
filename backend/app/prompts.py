@@ -208,11 +208,21 @@ Respond with ONLY a JSON object:
  "feedback": "<two or three sentences: what the question demanded, what was missing or wrong>"}"""
 
 
-def verify_user(query: str, answer: str, history: list[dict] | None = None) -> str:
+def verify_user(query: str, answer: str, history: list[dict] | None = None,
+                web_used: bool = False) -> str:
     from .config import settings
     transcript = format_history(history or [], settings.history_max_turns_verify,
                                 settings.history_max_chars_verify)
     prefix = (f"CONTEXT — earlier conversation, already handled, do NOT "
               f"grade against it:\n{transcript}\n\n" if transcript else "")
+    web_note = (
+        "\n\nIMPORTANT — this answer was produced with a LIVE WEB SEARCH, so "
+        "it may contain facts newer than your own training. Do NOT treat a "
+        "claim as wrong or hallucinated just because you can't confirm it or "
+        "it postdates what you know — assume web-sourced facts (especially "
+        "cited ones) are current and correct. Grade relevance, coherence, "
+        "internal consistency, and whether it answers the question; do not "
+        "grade it against your own possibly-outdated knowledge."
+        if web_used else "")
     return (f"{prefix}CURRENT QUESTION — grade the answer ONLY against "
-            f"this:\n{query}\n\nCANDIDATE ANSWER:\n{answer}")
+            f"this:\n{query}\n\nCANDIDATE ANSWER:\n{answer}{web_note}")
