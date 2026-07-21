@@ -40,16 +40,16 @@ class ModelSpec:
 TIER1_MODELS: dict[str, ModelSpec] = {
     # Bidders/verifier run free-first with an automatic paid fallback when
     # the free pool is rate-limited. Pricing fields = the paid fallback.
-    "deepseek": ModelSpec(  # general
-        key="deepseek",
-        openrouter_id="deepseek/deepseek-v4-flash:free",
-        fallback_id="deepseek/deepseek-v4-flash",
-        display_name="DeepSeek V4 Flash",
-        cost_per_mtok_in=0.09,
-        cost_per_mtok_out=0.18,
-        specialty="a fast, capable generalist: general knowledge, writing, "
-                  "summaries, everyday questions, and reasoning; solid "
-                  "all-rounder across most topics",
+    "gemma": ModelSpec(  # general
+        key="gemma",
+        openrouter_id="google/gemma-4-26b-a4b-it:free",
+        fallback_id="google/gemma-4-26b-a4b-it",
+        display_name="Gemma 4",
+        cost_per_mtok_in=0.10,
+        cost_per_mtok_out=0.40,
+        specialty="a fast lightweight generalist: general knowledge, writing, "
+                  "summaries, and everyday questions; solid all-rounder, less "
+                  "specialized for hard math or large coding tasks",
     ),
     "qwen": ModelSpec(  # coding
         key="qwen",
@@ -66,24 +66,25 @@ TIER1_MODELS: dict[str, ModelSpec] = {
                   "could answer it. Code is your only lane; do not compete "
                   "outside it",
     ),
-    "skyfall": ModelSpec(  # creative
-        key="skyfall",
-        openrouter_id="thedrummer/skyfall-36b-v2",  # paid only, no free variant
-        display_name="Skyfall 36B V2",
-        cost_per_mtok_in=0.55,
-        cost_per_mtok_out=0.80,
-        specialty="a creative-writing specialist: storytelling, fiction, "
-                  "role-play, poetry, dialogue, and nuanced expressive prose; "
-                  "less suited to factual precision, hard math, or code",
+    "deepseek": ModelSpec(  # logic / math
+        key="deepseek",
+        openrouter_id="deepseek/deepseek-v4-flash:free",
+        fallback_id="deepseek/deepseek-v4-flash",
+        display_name="DeepSeek V4 Flash",
+        cost_per_mtok_in=0.09,
+        cost_per_mtok_out=0.18,
+        specialty="strongest at mathematical reasoning, logic puzzles, and "
+                  "quantitative problems; solid at code; average at niche "
+                  "world knowledge",
     ),
 }
 
 # Topic toggle -> which tier-1 model drafts speculatively during bidding.
 # If the auction then picks that model, its draft is already in flight.
 SPECULATIVE_HINT_MODELS: dict[str, str] = {
-    "general": "deepseek",
+    "general": "gemma",
     "coding": "qwen",
-    "creative": "skyfall",
+    "reasoning": "deepseek",
 }
 
 # --- Verifier ---------------------------------------------------------------

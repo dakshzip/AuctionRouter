@@ -340,7 +340,7 @@ export function Chat({
           [
             ["general", "general"],
             ["coding", "coding"],
-            ["creative", "creative"],
+            ["reasoning", "logic/math"],
           ] as [QueryHint, string][]
         ).map(([value, label]) => (
           <button
