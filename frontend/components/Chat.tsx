@@ -411,7 +411,7 @@ export function Chat({
         <div ref={bottomRef} />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-4">
         {(
           [
             ["general", "general"],
