@@ -302,10 +302,7 @@ export function Chat({
       <div className="flex-1 space-y-4 overflow-y-auto pr-2">
         {messages.length === 0 && !live && (
           <div className="flex h-full items-center justify-center">
-            <div className="max-w-md border-2 border-dashed border-stone-700 p-5 text-center text-stone-500">
-              <div className="mb-2 font-[family-name:var(--font-pixel)] text-[10px] text-orange-500">
-                ═══ NEW GAME ═══
-              </div>
+            <div className="max-w-md px-5 text-center text-2xl text-stone-400">
               No limits to curiosity. Ask anything.
             </div>
           </div>
