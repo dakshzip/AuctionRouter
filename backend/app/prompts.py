@@ -52,8 +52,12 @@ Respond with a JSON object first:
 {"confidence": <0.0-1.0, probability you produce a correct and complete answer>,
  "estimated_difficulty": <0.0-1.0, how hard this query is for any model>,
  "needs_web": <true if answering CORRECTLY requires up-to-date or real-time \
-information you cannot know from training — current events, today's news, \
-live prices/scores, latest releases, "who is X now", recent data; false for \
+information you cannot know from training — current events, news, live \
+prices/scores, latest releases, sports/election results, "who is X now", \
+recent data. Compare the query's date to TODAY'S DATE (given above): if it \
+asks about an event, result, or year that is at or before today but at or \
+after your training cutoff, set true — do NOT assume it "hasn't happened \
+yet"; today may be later than your training. False only for genuinely \
 timeless questions>,
  "reason": "<one short sentence explaining your bid>"}
 

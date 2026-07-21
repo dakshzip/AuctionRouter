@@ -52,8 +52,12 @@ async def close_client() -> None:
 
 def _build_messages(system: str, user: str,
                     history: list[dict] | None) -> list[dict]:
+    # Ground every model in the current date so it doesn't treat recent
+    # events as "hasn't happened yet" (and flags needs_web correctly)
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     return [
-        {"role": "system", "content": system},
+        {"role": "system", "content": f"Today's date is {today}.\n\n{system}"},
         *({"role": t["role"], "content": t["content"]} for t in (history or [])),
         {"role": "user", "content": user},
     ]
