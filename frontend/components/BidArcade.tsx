@@ -62,10 +62,10 @@ export function BidArcade() {
   return (
     <div className="pixel-panel glow-border p-4">
       <h3 className="mb-1 font-[family-name:var(--font-pixel)] text-[10px] uppercase tracking-wider text-orange-500">
-        ▚ Live Auction House
+        ▚ The Bots Are Warming Up
       </h3>
       <p className="mb-4 text-sm text-stone-500">
-        waiting for a query… the bots are warming up
+        Let them compete — the smartest answer wins
       </p>
 
       <div className="border-2 border-stone-800 bg-black px-3 pb-3 pt-6">

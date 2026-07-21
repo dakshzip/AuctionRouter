@@ -32,7 +32,7 @@ export function AccessGate({
           <span className="blink text-orange-500">_</span>
         </h1>
         <p className="font-[family-name:var(--font-pixel)] text-[10px] uppercase leading-relaxed text-orange-500/80">
-          Ask more, pay less
+          Ask more, know faster, pay less
         </p>
 
         {/* the bots warming up — same auction animation shown before a query */}

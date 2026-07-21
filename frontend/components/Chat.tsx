@@ -60,7 +60,7 @@ const SEARCH_PHRASES = [
 
 // Rotating input-box placeholders. Index 0 is always the opening greeting.
 const PLACEHOLDERS = [
-  "> hey there — ask me anything…",
+  "> Hi, what's going on?",
   "> tip: type /explain to see how the auction works",
   "> tip: use the general / coding / logic-math toggle",
   "> tip: ask about current events — it searches the web",
@@ -71,29 +71,39 @@ const PLACEHOLDERS = [
 // Prewritten answer for the /explain command (rendered as Markdown)
 const EXPLAIN_TEXT = `## How GAVL works
 
-Every query runs a little **auction** among cheap models, and only the hard ones reach an expensive frontier model. Here's the flow.
+Most chat apps send every question to one big, expensive model. GAVL doesn't. For each query it runs a tiny **auction**, lets cheap specialist models compete to answer, checks the winner's work, and only calls an expensive frontier model for the genuinely hard questions. You get frontier-quality answers without paying frontier prices on the easy majority.
 
-### 1. Bidding
+### 1. The bidders
 
-Three specialist models bid in parallel — a generalist, a coder, and a logic/math model. Each returns a **confidence** (how well it'd answer), an **estimated difficulty**, and whether the query **needs live web search**. A confident bidder also drafts its answer right away.
+Three cheap, fast models sit on the panel, each a specialist:
+
+- a **generalist** for everyday questions, knowledge, and writing
+- a **coder** for programming, debugging, and software architecture
+- a **logic/math** model for reasoning and quantitative problems
+
+When your query arrives, all three bid **in parallel**. Each returns a confidence (how well it thinks it would answer), a difficulty estimate, and a flag for whether the question needs live web data. A confident bidder also drafts its full answer on the spot, so if it wins there is no extra round-trip and you see text almost immediately.
 
 ### 2. The auction
 
-The bids are scored on \`0.7·confidence + 0.2·historical accuracy − 0.1·cost\`, and a winner is picked. Your **topic toggle** gives its model priority when it bids confidently. If nobody is confident and the query is genuinely hard, it escalates immediately.
+Bids are scored so that a model which is confident, has a good track record, and is cheap tends to win. The **topic toggle** above the input (general / coding / logic-math) lets you steer: it gives that model priority when it bids confidently. And the track record is *learned* -- a model that overbids and then fails verification is trusted a little less next time.
 
 ### 3. Verification
 
-An independent verifier grades the winner's draft — correctness, completeness, and commitment. Creative writing skips this (no right answer to check).
+The winning draft is graded by an **independent verifier** on correctness, completeness, and commitment. This is what catches a confident-but-wrong answer before it reaches you. Creative writing (stories, poems) skips this step, since there is no single correct answer to grade against.
 
-### 4. Escalation
+### 4. Escalation -- the "boss fight"
 
-Only if a **hard** query fails verification does it summon the frontier model (the "boss fight"). Easy queries never escalate — a weak answer just ships marked unverified.
+If a **genuinely hard** query fails verification, GAVL escalates to a frontier model: the boss. The bidders' difficulty estimate decides how hard it thinks and how long it is allowed to deliberate. Crucially, **easy questions never escalate** -- a weak answer to an easy question just ships (clearly marked unverified) rather than burning frontier money on something that does not need it.
 
 ### 5. Web search
 
-If a bidder flags the query as needing current info (news, latest releases, "who won X"), the winner searches the web and cites its sources.
+If a bidder flags that answering correctly needs current information -- breaking news, latest releases, sports or election results, "who is X now", or a specific recent item it cannot recall -- the winner runs a live **web search** and cites its sources, instead of guessing from stale training data.
 
-The point: **frontier-quality answers without paying frontier prices on every query.**`;
+---
+
+**The result:** most questions are answered in a few seconds by a cheap model, quality-checked by the verifier, and grounded on the web when they need to be, while the expensive frontier model is reserved for the small fraction of questions that truly require it. Frontier-level answers, a fraction of the cost.
+
+*Tip: try a toggle, ask a current-events question to watch it search, or ask something genuinely hard to summon the boss.*`;
 
 export function Chat({
   onRun,
