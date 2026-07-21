@@ -448,7 +448,7 @@ export function Chat({
           }}
           rows={2}
           placeholder={PLACEHOLDERS[phIdx]}
-          className="flex-1 resize-none rounded-3xl border-2 border-stone-700 bg-black px-5 py-2 text-stone-200 outline-none placeholder:text-stone-600 focus:border-orange-500"
+          className="flex-1 resize-none rounded-3xl bg-stone-900 px-5 py-2 text-stone-200 outline-none placeholder:text-stone-600"
         />
         <button
           onClick={send}
