@@ -108,6 +108,9 @@ export function Chat({
   const [live, setLive] = useState<LiveState | null>(null);
   const [hint, setHint] = useState<QueryHint>("general");
   const [tick, setTick] = useState(0);
+  // Tips linger ~10s into a query (even as the answer streams), then go
+  const [tipsOn, setTipsOn] = useState(false);
+  const tipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   // Streamed text lands here and is animated out at a steady rate —
   // network chunks are bursty; the typewriter effect is client-side
@@ -136,17 +139,18 @@ export function Chat({
     return () => clearInterval(id);
   }, [streaming]);
 
-  // Rotate the boss / search / tips tickers while there's no answer text yet
+  // Boss / search tickers show only before any text; tips linger ~10s into
+  // the query (via tipsOn) even while the answer is streaming.
   const bossThinking = !!live?.escalating && !live.text;
   const searchingActive = !!live?.searching && !live.text;
-  const waiting = !!live && !live.text; // auction/bidding, before any text
-  const showTip = waiting && !bossThinking && !searchingActive;
+  const showTip = !!live && tipsOn && !bossThinking && !searchingActive;
+  const tickerOn = bossThinking || searchingActive || showTip;
   useEffect(() => {
-    if (!waiting) return;
+    if (!tickerOn) return;
     setTick(0);
     const id = setInterval(() => setTick((t) => t + 1), 2600);
     return () => clearInterval(id);
-  }, [waiting]);
+  }, [tickerOn]);
 
   // One condensed reasoning headline at a time, swapped every ~7.5s —
   // raw reasoning streams far too fast to read
@@ -198,6 +202,10 @@ export function Chat({
       provisional: true,
       thinking: "",
     });
+    // Keep tips up for ~10s into the query, then let them fade
+    if (tipTimer.current) clearTimeout(tipTimer.current);
+    setTipsOn(true);
+    tipTimer.current = setTimeout(() => setTipsOn(false), 10000);
     scroll();
     try {
       await streamQuery(query, history, hint, (ev) => {
