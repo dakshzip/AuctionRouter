@@ -58,6 +58,42 @@ const SEARCH_PHRASES = [
   "gathering fresh intel…",
 ];
 
+// Loading-screen tips shown while the auction runs
+const TIPS = [
+  "tip: type /explain to see exactly how the auction works",
+  "tip: use the general / coding / logic-math toggle to hint the router",
+  "tip: ask about current events — it searches the web automatically",
+  "tip: only genuinely hard STEM questions summon the frontier model",
+  "tip: click any answer to inspect its bids and verifier score",
+];
+
+// Prewritten answer for the /explain command (rendered as Markdown)
+const EXPLAIN_TEXT = `## How AuctionRouter works
+
+Every query runs a little **auction** among cheap models, and only the hard ones reach an expensive frontier model. Here's the flow.
+
+### 1. Bidding
+
+Three specialist models bid in parallel — a generalist, a coder, and a logic/math model. Each returns a **confidence** (how well it'd answer), an **estimated difficulty**, and whether the query **needs live web search**. A confident bidder also drafts its answer right away.
+
+### 2. The auction
+
+The bids are scored on \`0.7·confidence + 0.2·historical accuracy − 0.1·cost\`, and a winner is picked. Your **topic toggle** gives its model priority when it bids confidently. If nobody is confident and the query is genuinely hard, it escalates immediately.
+
+### 3. Verification
+
+An independent verifier grades the winner's draft — correctness, completeness, and commitment. Creative writing skips this (no right answer to check).
+
+### 4. Escalation
+
+Only if a **hard** query fails verification does it summon the frontier model (the "boss fight"). Easy queries never escalate — a weak answer just ships marked unverified.
+
+### 5. Web search
+
+If a bidder flags the query as needing current info (news, latest releases, "who won X"), the winner searches the web and cites its sources.
+
+The point: **frontier-quality answers without paying frontier prices on every query.**`;
+
 export function Chat({
   onRun,
   selectedRunId,
@@ -100,16 +136,17 @@ export function Chat({
     return () => clearInterval(id);
   }, [streaming]);
 
-  // Rotate the boss-thought / search-phrase tickers while there's no text yet
+  // Rotate the boss / search / tips tickers while there's no answer text yet
   const bossThinking = !!live?.escalating && !live.text;
   const searchingActive = !!live?.searching && !live.text;
-  const ticking = bossThinking || searchingActive;
+  const waiting = !!live && !live.text; // auction/bidding, before any text
+  const showTip = waiting && !bossThinking && !searchingActive;
   useEffect(() => {
-    if (!ticking) return;
-    setTick(0); // open on the first phrase
-    const id = setInterval(() => setTick((t) => t + 1), 2200);
+    if (!waiting) return;
+    setTick(0);
+    const id = setInterval(() => setTick((t) => t + 1), 2600);
     return () => clearInterval(id);
-  }, [ticking]);
+  }, [waiting]);
 
   // One condensed reasoning headline at a time, swapped every ~7.5s —
   // raw reasoning streams far too fast to read
@@ -131,6 +168,17 @@ export function Chat({
   async function send() {
     const query = input.trim();
     if (!query || live) return;
+    // Local command: /explain prints a prewritten walkthrough, no pipeline
+    if (query.toLowerCase() === "/explain") {
+      setInput("");
+      setMessages((m) => [
+        ...m,
+        { role: "user", text: query },
+        { role: "assistant", text: EXPLAIN_TEXT },
+      ]);
+      scroll();
+      return;
+    }
     // Prior turns (excluding errors) give the pipeline conversation context
     const history: ChatTurn[] = messages
       .filter((m) => m.role !== "error")
@@ -281,16 +329,18 @@ export function Chat({
                     : "hover:shadow-[inset_3px_0_0_0_#57534e]"
                 }`}
               >
-                <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                  <Badge tone={msg.run?.tier === 1 ? "green" : "amber"}>
-                    {msg.run?.answered_by}
-                  </Badge>
-                  {msg.run?.escalated && <Badge tone="amber">boss fight</Badge>}
-                  <span className="text-xs text-stone-600">
-                    ${msg.run?.total_cost_usd.toFixed(5)} ·{" "}
-                    {((msg.run?.latency_ms ?? 0) / 1000).toFixed(1)}s
-                  </span>
-                </div>
+                {msg.run && (
+                  <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                    <Badge tone={msg.run.tier === 1 ? "green" : "amber"}>
+                      {msg.run.answered_by}
+                    </Badge>
+                    {msg.run.escalated && <Badge tone="amber">boss fight</Badge>}
+                    <span className="text-xs text-stone-600">
+                      ${msg.run.total_cost_usd.toFixed(5)} ·{" "}
+                      {(msg.run.latency_ms / 1000).toFixed(1)}s
+                    </span>
+                  </div>
+                )}
                 <div className="text-stone-200">
                   <Markdown>{msg.text}</Markdown>
                 </div>
@@ -324,6 +374,11 @@ export function Chat({
               {searchingActive && (
                 <div className="max-w-full truncate font-mono text-xs italic text-stone-500">
                   {SEARCH_PHRASES[tick % SEARCH_PHRASES.length]}
+                </div>
+              )}
+              {showTip && (
+                <div className="max-w-full font-mono text-xs italic text-stone-500">
+                  {TIPS[tick % TIPS.length]}
                 </div>
               )}
               {live.text && (
