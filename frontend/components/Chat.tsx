@@ -47,29 +47,6 @@ const BOSS_THOUGHTS = [
   "aligning brain cells…",
 ];
 
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        });
-      }}
-      className={`ml-auto border px-1.5 font-[family-name:var(--font-pixel)] text-[10px] uppercase leading-4 ${
-        copied
-          ? "border-green-600 text-green-400"
-          : "border-stone-600 text-stone-500 hover:border-orange-500 hover:text-orange-400"
-      }`}
-      title="copy answer"
-    >
-      {copied ? "✓ copied" : "copy"}
-    </button>
-  );
-}
-
 export function Chat({
   onRun,
   selectedRunId,
@@ -289,7 +266,6 @@ export function Chat({
                     ${msg.run?.total_cost_usd.toFixed(5)} ·{" "}
                     {((msg.run?.latency_ms ?? 0) / 1000).toFixed(1)}s
                   </span>
-                  <CopyButton text={msg.text} />
                 </div>
                 <div className="text-stone-200">
                   <Markdown>{msg.text}</Markdown>
