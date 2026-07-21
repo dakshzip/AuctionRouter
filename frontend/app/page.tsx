@@ -50,8 +50,8 @@ export default function Home() {
     <div className="mx-auto flex h-dvh w-full flex-col px-3 py-3 sm:px-6 sm:py-4">
       <header className="mb-3 flex items-center justify-between gap-2 px-1 py-1 sm:mb-4 sm:py-2">
         <h1 className="crt font-[family-name:var(--font-pixel)] text-base tracking-tight text-stone-200 sm:text-2xl">
-          AUCTION
-          <span className="glow-pulse text-orange-500">ROUTER</span>
+          GA
+          <span className="glow-pulse text-orange-500">VL</span>
           <span className="blink text-orange-500">_</span>
         </h1>
         <nav className="flex gap-2">

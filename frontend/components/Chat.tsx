@@ -68,7 +68,7 @@ const TIPS = [
 ];
 
 // Prewritten answer for the /explain command (rendered as Markdown)
-const EXPLAIN_TEXT = `## How AuctionRouter works
+const EXPLAIN_TEXT = `## How GAVL works
 
 Every query runs a little **auction** among cheap models, and only the hard ones reach an expensive frontier model. Here's the flow.
 
@@ -298,9 +298,7 @@ export function Chat({
               <div className="mb-2 font-[family-name:var(--font-pixel)] text-[10px] text-orange-500">
                 ═══ NEW GAME ═══
               </div>
-              ask anything. three cheap models bid for your query, the winner
-              answers, a verifier judges it, and only the hard fights summon
-              the frontier boss.
+              No limits to curiosity. Ask anything.
             </div>
           </div>
         )}

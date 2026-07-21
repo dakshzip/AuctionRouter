@@ -11,7 +11,7 @@ const pixelFont = Press_Start_2P({
 });
 
 export const metadata: Metadata = {
-  title: "AuctionRouter",
+  title: "GAVL",
   description:
     "Cost-aware multi-agent LLM orchestrator with auction-based routing and verification-based escalation",
 };

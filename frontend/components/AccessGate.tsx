@@ -27,12 +27,12 @@ export function AccessGate({
     <div className="flex h-screen items-center justify-center px-6">
       <div className="w-full max-w-sm space-y-4 text-center">
         <h1 className="crt font-[family-name:var(--font-pixel)] text-3xl text-stone-200">
-          AUCTION
-          <span className="glow-pulse text-orange-500">ROUTER</span>
+          GA
+          <span className="glow-pulse text-orange-500">VL</span>
           <span className="blink text-orange-500">_</span>
         </h1>
         <p className="font-[family-name:var(--font-pixel)] text-[10px] uppercase leading-relaxed text-orange-500/80">
-          stop paying frontier prices for every query
+          Ask more, pay less
         </p>
 
         {/* the bots warming up — same auction animation shown before a query */}
