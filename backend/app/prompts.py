@@ -57,8 +57,12 @@ prices/scores, latest releases, sports/election results, "who is X now", \
 recent data. Compare the query's date to TODAY'S DATE (given above): if it \
 asks about an event, result, or year that is at or before today but at or \
 after your training cutoff, set true — do NOT assume it "hasn't happened \
-yet"; today may be later than your training. False only for genuinely \
-timeless questions>,
+yet"; today may be later than your training. ALSO set true when the query \
+names a SPECIFIC identified item you cannot confidently recall — a numbered \
+problem ("LeetCode 3499"), a specific product/version/paper/API/library \
+release, or any named entry that may postdate your training. Do NOT invent \
+its details or claim it "does not exist" from memory — look it up. False \
+only for genuinely timeless questions>,
  "reason": "<one short sentence explaining your bid>"}
 
 If (and only if) your confidence is 0.8 or higher, then after the JSON object \
