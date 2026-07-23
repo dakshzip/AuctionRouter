@@ -316,6 +316,26 @@ def _admits_no_fresh_info(text: str) -> bool:
     return bool(_NO_FRESH_INFO.search(text or ""))
 
 
+# Teaching-style queries deserve the full step-by-step multi-diagram treatment.
+# Bid-inline answers (---ANSWER--- riding along with the JSON) come out
+# compressed regardless of prompt — the bidding context suppresses length — so
+# for these queries we discard the bid answer and run a dedicated draft call
+# with ANSWER_SYSTEM, where the same model produces the rich style.
+_TEACHING = re.compile(r"""(?ix)
+    \b explain .{0,60} (?:detail|depth|thoroughly|step\s+by\s+step) \b
+  | \b (?:in\s+detail|in\s+depth|step\s+by\s+step) \b
+  | \b (?:go|dive) \s+ deeper \b
+  | \b explain \s+ (?:further|more) \b
+  | \b (?:teach|walk) \s+ me \s+ (?:about|through) \b
+  | \b how \s+ (?:does|do) \s+ .{0,40} \s+ work \b
+  | \b what \s+ is \s+ .{0,40} \?? \s* explain \b
+""")
+
+
+def _wants_teaching(query: str) -> bool:
+    return bool(_TEACHING.search(query))
+
+
 async def auction(state: RouterState) -> RouterState:
     bids = state["bids"]
     valid = [b for b in bids if b.error is None]
@@ -364,7 +384,11 @@ async def auction(state: RouterState) -> RouterState:
     # UI announces "let me search the web" in that case (regex hits go straight
     # to the search silently, since we knew from the start).
     out["web_via_bidder"] = needs_web and not regex_web
-    if winner.draft_answer and not needs_web:
+    # Teaching-style queries skip the bid-inline answer too: the bidding
+    # context compresses it, while a dedicated ANSWER_SYSTEM draft call gives
+    # the full step-by-step multi-diagram style.
+    if winner.draft_answer and not needs_web \
+            and not _wants_teaching(state["query"]):
         out["draft_answer"] = winner.draft_answer
     return out
 

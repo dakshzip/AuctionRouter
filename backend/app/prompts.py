@@ -31,7 +31,7 @@ _FORMATTING = """Formatting:
 - Simple greetings and one-line factual answers stay PLAIN — just answer, no \
 headings, no structure, no emoji.
 - For a longer answer that needs real information, follow this shape EXACTLY, \
-in this order:
+in this order,this is necessary NOT OPTIONAL:
   1. The FIRST line is the short, direct answer (one or two sentences). Do NOT \
 open with a title, a bold heading, or a restatement of the question — just \
 answer it.
@@ -47,10 +47,16 @@ content genuinely needs it.
 items. Avoid large tables — prefer bullets or short prose unless a table is \
 truly the clearest way to compare several things.
   7. End with a one-line concise takeaway.
-- Diagrams: when a question is about a FLOW, pipeline, decision tree, \
-architecture, or hierarchy — something whose structure is clearer seen than \
-described — draw a simple ASCII diagram inside a fenced code block, using \
-boxes/labels with │ ▼ ├── └── arrows. For example:
+- Diagrams: draw a simple ASCII diagram inside a fenced code block (boxes/ \
+labels with │ ▼ ├── └── arrows) whenever it makes the structure clearer than \
+prose. Lean toward including one when:
+  - the topic is a FLOW, pipeline, decision tree, architecture, or hierarchy;
+  - it is an ACADEMIC or conceptual explanation — a process, cycle, proof \
+structure, system, or how parts relate (biology pathways, physics setups, CS \
+data structures, economic models, state machines, etc.); OR
+  - the user asks you to "explain further", "go deeper", "in more detail", or \
+otherwise wants a fuller teaching-style answer — a diagram often teaches best.
+For example:
 
     User Query
         │
@@ -61,14 +67,51 @@ boxes/labels with │ ▼ ├── └── arrows. For example:
         │
         └── search ──▶ Web Search ──▶ Main LLM
 
-Use this ONLY when it genuinely aids understanding — never for simple facts, \
-opinions, or prose-only answers. One clear diagram beats three; don't force it.
-- Emojis: for any longer, multi-section answer you MUST include 2-3 relevant \
+For a conceptual "what is X" / "how does X work" / "explain in detail" \
+teaching answer, do NOT compress into a summary with one diagram at the end. \
+Structure it as a NUMBERED step-by-step build-up — aim for 6 to 12 steps — \
+where each step introduces ONE idea in a few short lines, and MOST steps embed \
+a tiny diagram (2-8 lines: a mini table, a labeled box, an arrow chain, a \
+before/after). Close with one "full picture" diagram tying the steps together. \
+The skeleton looks like:
+
+    ## Step 1: <first idea>
+    Two or three short lines of prose.
+    ```
+    cat -> [0.23, -1.14, ...]   (tiny concrete example)
+    ```
+    ## Step 2: <next idea>
+    Short prose again.
+    ```
+    word + position = input
+    ```
+    ...more steps...
+    ## The full picture
+    ```
+    Input -> Step1 -> Step2 -> ... -> Output
+    ```
+
+Many small, well-placed diagrams through a teaching answer are IDEAL, not \
+excessive — a teaching answer with only one diagram is UNDER-formatted. \
+Still, only draw a diagram when it genuinely aids understanding — never for \
+simple facts, opinions, greetings, or a short prose answer; don't force one \
+where a sentence is already clear.
+- Emojis: for any longer, multi-section answer you can include 2-3 relevant \
 emojis (for example one next to two or three of the section headings, or beside \
-the final takeaway) — this is required, not optional; a longer answer with zero \
+the final takeaway) — this is optional but heavily encouraged to use atleast one; a longer answer with zero \
 emojis is wrong. Cap it at 2-3 for the whole answer: never one on every \
 heading, bullet, or line. Use NONE for a short/simple answer or a greeting.
-- Use **bold** only for the occasional genuinely-key word."""
+- Use **bold** only for the occasional genuinely-key word.
+- Math — follow EXACTLY or it renders as garbled text:
+  - Inline math wraps in single dollars: $\\Delta f$. Display math goes ALONE \
+on its own line wrapped in $$ ... $$, with a blank line before and after.
+  - EVERY multi-line environment (aligned, matrix, pmatrix, cases, etc.) MUST \
+sit INSIDE $$ ... $$ — never write a bare \\begin{...}; an undelimited \
+equation will not render.
+  - Inside a matrix or aligned block, separate rows with a DOUBLE backslash \
+\\\\ (never a single "\\" or "\\[2pt]" glued to the next entry).
+  - Every $ and $$ must be balanced (opened and closed); never use \\boxed, and \
+never put math inside a blockquote (no ">" before an equation)."""
 
 
 BID_SYSTEM = """You are a bidding agent for a specific language model. Assess honestly how well YOUR model would handle the \
