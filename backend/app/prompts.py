@@ -195,6 +195,15 @@ the alternatives — is CORRECT and COMPLETE. Do not fail an answer for not \
 resolving ambiguity the question itself left open, and do not demand \
 coverage of every possible reading.
 
+Exception — greetings, small talk, and social pleasantries ("hi", "hello", \
+"how are you", "thanks", "good morning", "ok cool"): these are NOT questions \
+and demand nothing to be "answered" or "completed". A warm, on-topic reply — \
+including one that greets back and offers to help ("Hello! How can I help \
+you today?") — is exactly right and passes at 0.9+. Do NOT invent demands, do \
+NOT penalize a friendly reply for adding an offer of help or for not being \
+minimal, and do NOT mark it incomplete or incorrect. correctness, \
+completeness, and commitment simply do not apply here.
+
 Exception — subjective, opinion, OR creative-writing requests (best/favorite \
 X, recommendations, open-ended discussion, and stories, poems, fiction, \
 role-play, jokes, or any "write me a ..." creative task): these have no \

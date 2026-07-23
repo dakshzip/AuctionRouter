@@ -411,7 +411,8 @@ export function Chat({
         <div ref={bottomRef} />
       </div>
 
-      <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-4">
+      <div className="mx-auto w-full max-w-[70rem]">
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-6">
         {(
           [
             ["general", "general"],
@@ -433,7 +434,7 @@ export function Chat({
           </button>
         ))}
       </div>
-      <div className="mt-4 flex gap-3">
+      <div className="mt-4 flex items-center gap-3 pl-3">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -443,17 +444,29 @@ export function Chat({
               send();
             }
           }}
-          rows={2}
+          rows={1}
           placeholder={PLACEHOLDERS[phIdx]}
-          className="flex-1 resize-none rounded-full bg-stone-900 px-6 py-2 text-stone-100 outline-none placeholder:text-stone-400"
+          className="w-full resize-none rounded-full bg-stone-900 px-6 py-3.5 text-left text-stone-100 outline-none placeholder:text-stone-400"
         />
         <button
           onClick={send}
           disabled={!!live || !input.trim()}
-          className="pixel-btn bg-orange-950 px-5 font-[family-name:var(--font-pixel)] text-[12px] uppercase text-orange-400 disabled:cursor-not-allowed disabled:text-stone-600"
+          aria-label="send"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-950 text-orange-400 hover:text-orange-300 disabled:cursor-not-allowed disabled:text-stone-600"
         >
-          send
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-5 w-5"
+          >
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
         </button>
+      </div>
       </div>
     </div>
   );

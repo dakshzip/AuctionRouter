@@ -40,13 +40,16 @@ class ModelSpec:
 TIER1_MODELS: dict[str, ModelSpec] = {
     # Bidders/verifier run free-first with an automatic paid fallback when
     # the free pool is rate-limited. Pricing fields = the paid fallback.
-    "gemma": ModelSpec(  # general
-        key="gemma",
-        openrouter_id="google/gemma-4-26b-a4b-it:free",
-        fallback_id="google/gemma-4-26b-a4b-it",
-        display_name="Gemma 4",
-        cost_per_mtok_in=0.10,
-        cost_per_mtok_out=0.40,
+    "gpt-oss": ModelSpec(  # general
+        key="gpt-oss",
+        # Paid endpoint on both slots (no :free variant) — skips free-tier
+        # queueing so the t=0 hedge gets a fast first token; provider_sort
+        # ("latency") then routes to the quickest provider.
+        openrouter_id="openai/gpt-oss-120b",
+        fallback_id="openai/gpt-oss-120b",
+        display_name="GPT-OSS 120B",
+        cost_per_mtok_in=0.037,
+        cost_per_mtok_out=0.17,
         specialty="a fast lightweight generalist: general knowledge, writing, "
                   "summaries, and everyday questions; solid all-rounder, less "
                   "specialized for hard math or large coding tasks",
@@ -82,7 +85,7 @@ TIER1_MODELS: dict[str, ModelSpec] = {
 # Topic toggle -> which tier-1 model drafts speculatively during bidding.
 # If the auction then picks that model, its draft is already in flight.
 SPECULATIVE_HINT_MODELS: dict[str, str] = {
-    "general": "gemma",
+    "general": "gpt-oss",
     "coding": "qwen",
     "reasoning": "deepseek",
 }
@@ -90,10 +93,12 @@ SPECULATIVE_HINT_MODELS: dict[str, str] = {
 # --- Verifier ---------------------------------------------------------------
 VERIFIER_MODEL = ModelSpec(
     key="verifier",
-    openrouter_id="openai/gpt-oss-120b",
-    display_name="GPT-OSS 120B (Verifier)",
-    cost_per_mtok_in=0.04,
-    cost_per_mtok_out=0.17,
+    # A different model from the generalist (gpt-oss-120b) so it never grades
+    # its own drafts — keeps the quality gate independent.
+    openrouter_id="meta-llama/llama-4-scout",
+    display_name="Llama 4 Scout (Verifier)",
+    cost_per_mtok_in=0.10,
+    cost_per_mtok_out=0.30,
 )
 
 class Settings(BaseSettings):
