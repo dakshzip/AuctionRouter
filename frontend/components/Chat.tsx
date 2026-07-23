@@ -323,7 +323,7 @@ export function Chat({
       <div className="flex-1 space-y-4 overflow-y-auto pr-2">
         {messages.length === 0 && !live && (
           <div className="flex h-full items-center justify-center">
-            <div className="max-w-md px-5 text-center font-[family-name:var(--font-pixel)] text-sm leading-relaxed text-stone-300">
+            <div className="whitespace-nowrap px-5 text-center font-[family-name:var(--font-pixel)] text-sm leading-relaxed text-stone-300">
               No limits to curiosity. Ask anything.
             </div>
           </div>
@@ -347,7 +347,7 @@ export function Chat({
             <div key={i} className="flex justify-start">
               <div
                 onClick={() => msg.run && onSelectRun(msg.run)}
-                className={`max-w-[58%] cursor-pointer select-text px-3 py-2 text-left ${
+                className={`max-w-[48%] cursor-pointer select-text px-3 py-2 text-left ${
                   msg.run && msg.run.id === selectedRunId
                     ? "shadow-[inset_3px_0_0_0_#f97316]"
                     : "hover:shadow-[inset_3px_0_0_0_#57534e]"
@@ -375,7 +375,7 @@ export function Chat({
         {live && (
           <div className="flex justify-start">
             <div
-              className={`max-w-[58%] px-3 py-2 ${
+              className={`max-w-[48%] px-3 py-2 ${
                 live.escalating ? "bg-orange-950/20" : ""
               }`}
             >

@@ -101,18 +101,30 @@ is ambiguous, answer the most plausible interpretation and briefly note the \
 main alternative if there is one. If you are unsure about a fact, say so \
 rather than guessing.
 
-Formatting — use real Markdown headings for section titles:
-- Title each major section with a Markdown heading: "###" followed by a few \
-words naming that section's actual topic (for example "### Pacing" or \
-"### Common Mistakes"). Write the topic itself — never the literal word \
-"heading" or "subheading".
-- Under a heading, put each point on its own line, its explanation (a \
-sentence or two) on the following line, then ONE blank line before the next \
-point — one blank line between points, not several.
-- Put any example, snippet, or before/after ("Instead of:" / "Try:") on its \
-own line, set off by a blank line — never inline in a paragraph.
-- Use **bold** only for the occasional genuinely-key word. Keep a simple \
-short answer plain — no headings needed for a one-liner."""
+Formatting:
+- Simple greetings and one-line factual answers stay PLAIN — just answer, no \
+headings, no structure, no emoji.
+- For a longer answer that needs real information, follow this shape EXACTLY, \
+in this order:
+  1. The FIRST line is the short, direct answer (one or two sentences). Do NOT \
+open with a title, a bold heading, or a restatement of the question — just \
+answer it.
+  2. Blank line.
+  3. Explain the core idea in 2-4 sentences of plain prose.
+  4. Blank line.
+  5. Break the body into sections with real Markdown "##" headings (two hashes, \
+not "###", and no numbering) named after each section's actual topic (for \
+example "## How it works" or "## Trade-offs" — never the literal word \
+"heading"). Keep paragraphs short (2-4 lines). Add another heading only if the \
+content genuinely needs it.
+  6. Default to prose. Use bullet points ONLY when comparing options or listing \
+items. Avoid large tables — prefer bullets or short prose unless a table is \
+truly the clearest way to compare several things.
+  7. End with a one-line concise takeaway.
+- Emojis: sprinkle a FEW to make richer answers feel friendly and fun — aim \
+for one beside a heading or the final takeaway, a small handful total. Less is \
+more: never one on every line, and NONE in a plain simple answer or greeting.
+- Use **bold** only for the occasional genuinely-key word."""
 
 # Escalated queries are the hard ones — the frontier model should show its
 # work rather than compress
