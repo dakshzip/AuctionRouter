@@ -63,8 +63,8 @@ const PLACEHOLDERS = [
   "> Hi, what's going on?",
   "> tip: type /explain to see how the auction works",
   "> tip: use the general / coding / logic-math toggle",
-  "> tip: ask about current events — it searches the web",
-  "> tip: hard STEM questions summon the frontier model",
+  "> tip: ask about current events — GAVL keeps up to date",
+  "> tip: ask something really tough — GAVL calls in its smartest model",
   "> tip: click any answer to inspect its bids & score",
 ];
 
