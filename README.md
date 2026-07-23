@@ -2,7 +2,7 @@
 title: GAVL
 emoji: 🔨
 colorFrom: indigo
-colorTo: orange
+colorTo: yellow
 sdk: docker
 app_port: 7860
 pinned: false
