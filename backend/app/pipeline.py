@@ -33,6 +33,7 @@ class RouterState(TypedDict, total=False):
     bids: list[Bid]
     winner: Optional[str]
     needs_web: bool
+    web_via_bidder: bool
     draft_answer: Optional[str]
     verification: Optional[Verification]
     escalated: bool
@@ -195,6 +196,126 @@ def _is_hard(state: RouterState) -> bool:
     return mean >= settings.escalation_min_difficulty
 
 
+# Real-time / recency signals: phrases that mean training data won't be fresh
+# enough to answer correctly. Tuned for recall so this handles most cases and
+# we rarely fall back to the slower bidder flag — but PHRASE-BASED, never lone
+# words, to avoid discourse/homonym false positives. Verbose/ignorecase.
+_WEB_KEYWORDS = re.compile(r"""(?ix)
+    # PHRASE-BASED ONLY: every signal needs multi-word context, never a lone
+    # word — bare words are too often discourse ("currently learning"),
+    # evergreen ("explain bitcoin"), or a homonym ("electric current",
+    # "musical score"). The single-token YEAR check lives separately below.
+    #
+    # --- explicit recency phrases ---------------------------------------
+    \b(?: right\s+now | as\s+of\s+(?:now|today|this\s+\w+) | just\s+now
+        | at\s+(?:the\s+moment | present | this\s+time)
+        | so\s+far\s+this\s+year | year[\s-]to[\s-]date
+        | up[\s-]?to[\s-]?date | most\s+recent | brand[\s-]?new )\b
+    # this/last/past/next/upcoming + a time unit
+  | \b(?: this | last | past | next | upcoming | coming )\s+
+        (?: week | month | year | quarter | night | season | morning | evening
+          | afternoon | few\s+(?:days|weeks|months|hours) )\b
+  | \b in\s+the\s+(?:last|past)\s+(?:hour|day|week|month|year|24\s+hours) \b
+    # yesterday/tomorrow are unambiguous temporal anchors (unlike bare "now")
+  | \b(?: yesterday | tomorrow ) \b
+    # latest/newest/recent + a following noun (not lone)
+  | \b(?: latest | newest | recent ) \s+ \w+
+  | \b just\s+(?:released|announced|launched|dropped|out|now|happened) \b
+    # --- "current holder / state of X" ----------------------------------
+  | \b who(?:\s+is|'s)?\s+(?:the\s+)?(?:current|latest|new|now|winning|reigning) \b
+  | \b who\s+(?:won|is\s+winning|leads?|is\s+leading|holds?\s+the) \b
+  | \b reigning\s+(?:champion|champions|title[\s-]?holder|world\s+champion) \b
+  | \b current\s+(?:president|ceo|leader|champion|holder|price|status|version
+        |score|standings|ranking|situation|record|value|rate|population) \b
+  | \b as\s+(?:it|things)\s+stand(?:s)?(?:\s+(?:now|today))? \b
+    # --- fast-moving domains (context required, never a lone word) --------
+  | \b(?: breaking | latest | any | more | the )\s+news \b
+  | \b news\s+(?:about|on|regarding|for) \b
+  | \b in\s+the\s+news \b
+  | \b weather\s+(?:in|today|tonight|tomorrow|forecast|report|this) \b
+  | \b (?:weather\s+)? forecast\s+(?:for|in|today|this) \b
+  | \b temperature\s+(?:in|outside|today|right\s+now) \b
+  | \b(?: is\s+it | will\s+it )\s+(?:rain|snow|be\s+sunny) \w* \b
+  | \b who\s+won \b
+  | \b(?: final | latest | current | the | live )\s+score \b
+  | \b score\s+of \b
+  | \b(?: league | current | latest | the )\s+standings \b
+  | \b(?: match | game | fixture | playoff | election | race )\s+results? \b
+  | \b(?: stock | share )\s+price \b
+  | \b price\s+of \b
+  | \b(?: market\s+cap | exchange\s+rate | gas\s+prices? ) \b
+  | \b(?: bitcoin | ethereum | crypto )\s+price \b
+  | \b how\s+much\s+(?:is|does|are|do)\s+(?!\d)   # not math/conversions ("how much is 2+2")
+  | \b(?: in\s+stock | back\s+in\s+stock | on\s+sale ) \b
+  | \b release\s+date \b
+  | \b(?: comes? | coming )\s+out \b
+  | \b box\s+office \b
+    # --- status / liveness (context required) ----------------------------
+  | \b is\s+\w+\s+(?:down|up|open|closed|available|sold\s+out) \b
+  | \b(?: server | site | website | flight | service )\s+status \b
+  | \b status\s+of \b
+""")
+_YEAR = re.compile(r"\b((?:19|20)\d{2})\b")
+
+# Current-state questions: the answer changes over time even though the query
+# contains no recency word — role holders, ages, valuations, local time.
+# Kept separate from _WEB_KEYWORDS because these get a historical-year guard:
+# "who is the president of France" needs the web, but "who was the president
+# ... in 1960" is settled history and shouldn't.
+_CURRENT_STATE = re.compile(r"""(?ix)
+    \b who(?:\s+is|'s)\s+the\s+(?:president | prime\s+minister | pm | ceo
+        | chancellor | mayor | governor | coach | manager | chairman | pope
+        | king | queen | monarch | captain | director | head )\b
+  | \b did\s+(?:the\s+)?\w+(?:\s+\w+)?\s+win \b
+  | \b how\s+old\s+is \b
+  | \b net\s+worth\s+of \b
+  | \b what\s+time\s+is\s+it \b
+""")
+
+
+def _needs_web_heuristic(query: str) -> bool:
+    """Cheap (~µs, no API) t=0 check for whether a query needs fresh data.
+
+    Fires on real-time keyword phrases, on any year at/after the tier-1
+    models' knowledge cutoff, or on current-state questions (role holders,
+    ages, prices) — unless the latter mention a pre-cutoff year, which makes
+    them history ("who was president in 1990"). OR'd with the bidder's own
+    needs_web flag — this only adds recall.
+    """
+    if _WEB_KEYWORDS.search(query):
+        return True
+    cutoff = settings.model_knowledge_cutoff_year
+    years = [int(y) for y in _YEAR.findall(query)]
+    if any(y >= cutoff for y in years):
+        return True
+    return bool(_CURRENT_STATE.search(query)) and not years
+
+
+# Draft self-admission that it lacks fresh info — the fallback when both the
+# regex and the bidder missed. If the model's own answer says "as of my
+# training / I don't have real-time data / hasn't happened yet / I'm not sure",
+# we retry the answer with a live web search.
+_NO_FRESH_INFO = re.compile(r"""(?ix)
+    \b as\s+of\s+(?:my|the)\s+(?:last\s+)?(?:knowledge|training|update|data)
+  | \b(?:my\s+)?(?:knowledge|training)\s+(?:cut[\s-]?off|data)
+  | \b i\s+(?:do\s+not|don'?t)\s+have\s+(?:access\s+to\s+)?
+        (?:real[\s-]?time|current|up[\s-]?to[\s-]?date|live|the\s+latest)
+  | \b i\s+(?:can'?t|cannot|am\s+unable\s+to)\s+
+        (?:access|browse|provide|retrieve|look\s+up)\b.{0,40}
+        (?:real[\s-]?time|current|internet|web|latest|live)
+  | \b(?:has|have)(?:n'?t| not)\s+(?:happened|occurred|taken\s+place)\s+yet
+  | \b i'?m\s+not\s+(?:sure|certain) | \b i\s+am\s+not\s+(?:sure|certain)
+  | \b i\s+(?:do\s+not|don'?t)\s+have\s+(?:that\s+|the\s+)?(?:information|data|details)
+  | \b may\s+have\s+(?:changed|been\s+updated)\s+since
+  | \b for\s+(?:the\s+)?(?:latest|current|up[\s-]?to[\s-]?date|most\s+recent)\b
+        .{0,40}?(?:check|refer|visit|consult|see\s+the)
+""")
+
+
+def _admits_no_fresh_info(text: str) -> bool:
+    return bool(_NO_FRESH_INFO.search(text or ""))
+
+
 async def auction(state: RouterState) -> RouterState:
     bids = state["bids"]
     valid = [b for b in bids if b.error is None]
@@ -236,8 +357,13 @@ async def auction(state: RouterState) -> RouterState:
     # A fresh-info query needs a web-grounded answer — any speculative bid
     # answer was written from stale training data, so discard it and force
     # a real (web-enabled) draft.
-    needs_web = winner.needs_web
+    regex_web = _needs_web_heuristic(state["query"])
+    needs_web = winner.needs_web or regex_web
     out["needs_web"] = needs_web
+    # True when the upfront regex missed but a bidder flagged the query — the
+    # UI announces "let me search the web" in that case (regex hits go straight
+    # to the search silently, since we knew from the start).
+    out["web_via_bidder"] = needs_web and not regex_web
     if winner.draft_answer and not needs_web:
         out["draft_answer"] = winner.draft_answer
     return out
@@ -245,22 +371,41 @@ async def auction(state: RouterState) -> RouterState:
 
 async def draft(state: RouterState) -> RouterState:
     spec = TIER1_MODELS[state["winner"]]
+    needs_web = state.get("needs_web", False)
     try:
         resp = await chat(spec, prompts.ANSWER_SYSTEM, state["query"],
                           history=state.get("history"), prefer_paid=True,
-                          web=state.get("needs_web", False))
+                          web=needs_web)
     except LLMError as e:
         return {"escalated": True, "escalation_reason": f"Winner failed to answer: {str(e)[:150]}"}
     if not resp.content.strip():
         return {"escalated": True,
                 "escalation_reason": f"{spec.display_name} returned an empty draft"}
-    usage = Usage(
+    usages = state["usages"] + [Usage(
         model_key=spec.key, model_name=spec.display_name, stage="draft",
         tokens_in=resp.tokens_in, tokens_out=resp.tokens_out,
         cost_usd=spec.estimate_cost(resp.tokens_in, resp.tokens_out),
         latency_ms=resp.latency_ms,
-    )
-    return {"draft_answer": resp.content, "usages": state["usages"] + [usage]}
+    )]
+    # Second-chance web search: if we didn't already search and the draft
+    # admits it lacks fresh info, retry once with a live web search.
+    if not needs_web and _admits_no_fresh_info(resp.content):
+        try:
+            web_resp = await chat(spec, prompts.ANSWER_SYSTEM, state["query"],
+                                  history=state.get("history"), prefer_paid=True,
+                                  web=True)
+            if web_resp.content.strip():
+                resp = web_resp
+                needs_web = True
+                usages = usages + [Usage(
+                    model_key=spec.key, model_name=spec.display_name, stage="draft",
+                    tokens_in=resp.tokens_in, tokens_out=resp.tokens_out,
+                    cost_usd=spec.estimate_cost(resp.tokens_in, resp.tokens_out),
+                    latency_ms=resp.latency_ms,
+                )]
+        except LLMError:
+            pass  # keep the original draft if the web retry fails
+    return {"draft_answer": resp.content, "needs_web": needs_web, "usages": usages}
 
 
 # Leaked chain-of-thought in a "final" answer means the model was struggling;
@@ -569,6 +714,14 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
     hedge_spec = TIER1_MODELS[hedge_key]
     state["hint_model"] = hedge_key
 
+    # t=0 web gate: run the regex BEFORE any model drafts. If the query clearly
+    # needs fresh data, skip the speculative hedge entirely — a no-web hedge
+    # would flash a stale "I don't know" to the user before the search kicks in.
+    # We then go straight to the web-enabled draft after the auction.
+    run_hedge = not _needs_web_heuristic(query)
+    if not run_hedge:
+        state["needs_web"] = True
+
     hedge_q: asyncio.Queue = asyncio.Queue()
 
     async def _hedge_stream():
@@ -585,14 +738,17 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
         except Exception:
             hedge_q.put_nowait(("final", None))
 
-    hedge_task = asyncio.create_task(_hedge_stream())
+    hedge_task = asyncio.create_task(_hedge_stream()) if run_hedge else None
     bid_task = asyncio.create_task(bid_collection(state))
 
     yield {"type": "stage", "stage": "bidding"}
     # Forward hedge tokens the moment they exist, while bids come in
     hedge_final: Optional[object] = None
-    hedge_done = False
+    hedge_done = not run_hedge
     while not bid_task.done():
+        if not run_hedge:
+            await asyncio.sleep(0.05)
+            continue
         try:
             kind, val = await asyncio.wait_for(hedge_q.get(), timeout=0.05)
         except asyncio.TimeoutError:
@@ -613,14 +769,16 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
 
     # A needs_web winner can't use the hedge draft (generated at t=0 with no
     # web access) — drop it and let the web-enabled draft path run instead.
-    hedge_won = (not state.get("escalated")
+    hedge_won = (run_hedge and not state.get("escalated")
                  and state.get("winner") == hedge_key
                  and not state.get("needs_web"))
     if not hedge_won:
         # Another model won (or we're escalating): drop the hedge and
-        # clear its provisional text on the client
-        hedge_task.cancel()
-        yield {"type": "reset"}
+        # clear its provisional text on the client. If no hedge ran (t=0 web
+        # gate), there's nothing streamed to reset.
+        if hedge_task is not None:
+            hedge_task.cancel()
+            yield {"type": "reset"}
         # A non-hedge winner may still have carried an answer in its bid;
         # that path (and the normal draft path) resumes below
     else:
@@ -676,6 +834,11 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                 state.update(await verify_task)
         else:
             if state.get("needs_web"):
+                # Regex-caught web queries search silently; a bidder-caught one
+                # (regex missed) announces the switch to the user first.
+                if state.get("web_via_bidder"):
+                    yield {"type": "token",
+                           "text": "🔎 Let me search the web for you…\n\n"}
                 yield {"type": "stage", "stage": "searching",
                        "model": spec.display_name}
             else:
@@ -709,6 +872,43 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             if state.get("draft_answer") and not _skip_verify(state):
                 yield {"type": "stage", "stage": "verifying"}
                 state.update(await verify(state))
+
+    # Second-chance web search: the regex missed and no bidder flagged it, but
+    # the model's own draft admits it lacks current info ("as of my training",
+    # "hasn't happened yet", "I'm not sure"). Tell the user we're checking the
+    # web, discard the stale draft, and re-answer with a live search — streamed.
+    if (not state.get("escalated") and not state.get("needs_web")
+            and state.get("draft_answer")
+            and _admits_no_fresh_info(state["draft_answer"])):
+        state["needs_web"] = True
+        state.pop("verification", None)
+        spec = TIER1_MODELS[state["winner"]]
+        yield {"type": "reset"}
+        yield {"type": "stage", "stage": "searching", "model": spec.display_name}
+        yield {"type": "token", "text": "🔎 Let me search the web for you…\n\n"}
+        try:
+            resp = None
+            async for ev in chat_stream(spec, prompts.ANSWER_SYSTEM, query,
+                                        history=state["history"], prefer_paid=True,
+                                        web=True):
+                if ev["type"] == "delta":
+                    yield {"type": "token", "text": ev["text"]}
+                elif ev["type"] == "final":
+                    resp = ev["response"]
+            if resp is not None and resp.content.strip():
+                state["draft_answer"] = resp.content
+                state["usages"] = state["usages"] + [Usage(
+                    model_key=spec.key, model_name=spec.display_name, stage="draft",
+                    tokens_in=resp.tokens_in, tokens_out=resp.tokens_out,
+                    cost_usd=spec.estimate_cost(resp.tokens_in, resp.tokens_out,
+                                                resp.served_model),
+                    latency_ms=resp.latency_ms,
+                )]
+                if not _skip_verify(state):
+                    yield {"type": "stage", "stage": "verifying"}
+                    state.update(await verify(state))
+        except LLMError:
+            pass  # keep the original draft if the web retry itself fails
 
     # Verification outcome is reported regardless of which path produced
     # the draft (hedge, bid speculative, or normal draft stage)

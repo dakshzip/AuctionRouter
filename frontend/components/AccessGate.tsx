@@ -41,21 +41,21 @@ export function AccessGate({
         </div>
 
         <p className="text-sm text-stone-500">
-          this demo is access-gated to protect API credits. enter the code you
-          were given.
+          this demo needs an invite code to keep it free for everyone. enter
+          the code you were given.
         </p>
         <input
           type="password"
           value={code}
           onChange={(e) => setCode(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="access code"
+          placeholder="invite code"
           autoFocus
           className="w-full border-2 border-stone-700 bg-black px-3 py-2 text-center text-stone-200 outline-none placeholder:text-stone-600 focus:border-orange-500"
         />
         {rejected && (
           <p className="text-sm text-red-400">
-            that code was rejected — try again.
+            that code didn&apos;t work — try again.
           </p>
         )}
         <button

@@ -24,6 +24,53 @@ def format_history(history: list[dict], max_turns: int, max_chars: int) -> str:
         lines.append(f"{t['role'].upper()}: {content}")
     return "\n".join(lines)
 
+# Shared answer-formatting rules — appended to BOTH the drafting prompt
+# (ANSWER_SYSTEM) and the bidder's speculative answer (BID_SYSTEM's ---ANSWER---
+# block), so a confident bid that ships directly is formatted identically.
+_FORMATTING = """Formatting:
+- Simple greetings and one-line factual answers stay PLAIN — just answer, no \
+headings, no structure, no emoji.
+- For a longer answer that needs real information, follow this shape EXACTLY, \
+in this order:
+  1. The FIRST line is the short, direct answer (one or two sentences). Do NOT \
+open with a title, a bold heading, or a restatement of the question — just \
+answer it.
+  2. Blank line.
+  3. Explain the core idea in 2-4 sentences of plain prose.
+  4. Blank line.
+  5. Break the body into sections with real Markdown "##" headings (two hashes, \
+not "###", and no numbering) named after each section's actual topic (for \
+example "## How it works" or "## Trade-offs" — never the literal word \
+"heading"). Keep paragraphs short (2-4 lines). Add another heading only if the \
+content genuinely needs it.
+  6. Default to prose. Use bullet points ONLY when comparing options or listing \
+items. Avoid large tables — prefer bullets or short prose unless a table is \
+truly the clearest way to compare several things.
+  7. End with a one-line concise takeaway.
+- Diagrams: when a question is about a FLOW, pipeline, decision tree, \
+architecture, or hierarchy — something whose structure is clearer seen than \
+described — draw a simple ASCII diagram inside a fenced code block, using \
+boxes/labels with │ ▼ ├── └── arrows. For example:
+
+    User Query
+        │
+        ▼
+    Router Model
+        │
+        ├── no search ──▶ Main LLM
+        │
+        └── search ──▶ Web Search ──▶ Main LLM
+
+Use this ONLY when it genuinely aids understanding — never for simple facts, \
+opinions, or prose-only answers. One clear diagram beats three; don't force it.
+- Emojis: for any longer, multi-section answer you MUST include 2-3 relevant \
+emojis (for example one next to two or three of the section headings, or beside \
+the final takeaway) — this is required, not optional; a longer answer with zero \
+emojis is wrong. Cap it at 2-3 for the whole answer: never one on every \
+heading, bullet, or line. Use NONE for a short/simple answer or a greeting.
+- Use **bold** only for the occasional genuinely-key word."""
+
+
 BID_SYSTEM = """You are a bidding agent for a specific language model. Assess honestly how well YOUR model would handle the \
 query. Overbidding hurts you: your answer will be checked by an independent verifier, \
 and failures lower your historical accuracy in future auctions.
@@ -71,8 +118,12 @@ to the query: accurate and complete. When the query asks you to explain, \
 elaborate, go into detail, or "explain in more detail", write a genuinely \
 thorough, in-depth answer — several paragraphs, worked examples, the full \
 picture. Don't be terse when depth is asked for. \
-If you are unsure about a fact, say so rather than guessing. If \
-your confidence is below 0.8, output ONLY the JSON object."""
+If you are unsure about a fact, say so rather than guessing. This ---ANSWER--- \
+is shown DIRECTLY to the user, so it MUST obey the formatting rules below \
+(including the emoji rule). If your confidence is below 0.8, output ONLY the \
+JSON object.
+
+""" + _FORMATTING
 
 
 def bid_user(query: str, history: list[dict] | None = None,
@@ -101,30 +152,7 @@ is ambiguous, answer the most plausible interpretation and briefly note the \
 main alternative if there is one. If you are unsure about a fact, say so \
 rather than guessing.
 
-Formatting:
-- Simple greetings and one-line factual answers stay PLAIN — just answer, no \
-headings, no structure, no emoji.
-- For a longer answer that needs real information, follow this shape EXACTLY, \
-in this order:
-  1. The FIRST line is the short, direct answer (one or two sentences). Do NOT \
-open with a title, a bold heading, or a restatement of the question — just \
-answer it.
-  2. Blank line.
-  3. Explain the core idea in 2-4 sentences of plain prose.
-  4. Blank line.
-  5. Break the body into sections with real Markdown "##" headings (two hashes, \
-not "###", and no numbering) named after each section's actual topic (for \
-example "## How it works" or "## Trade-offs" — never the literal word \
-"heading"). Keep paragraphs short (2-4 lines). Add another heading only if the \
-content genuinely needs it.
-  6. Default to prose. Use bullet points ONLY when comparing options or listing \
-items. Avoid large tables — prefer bullets or short prose unless a table is \
-truly the clearest way to compare several things.
-  7. End with a one-line concise takeaway.
-- Emojis: sprinkle a FEW to make richer answers feel friendly and fun — aim \
-for one beside a heading or the final takeaway, a small handful total. Less is \
-more: never one on every line, and NONE in a plain simple answer or greeting.
-- Use **bold** only for the occasional genuinely-key word."""
+""" + _FORMATTING
 
 # Escalated queries are the hard ones — the frontier model should show its
 # work rather than compress
@@ -138,7 +166,11 @@ brevity — do not pad with filler or restate the question, but never \
 compress at the expense of understanding. Format the answer in Markdown: \
 real ## / ### headings for sections, with the heading text naming the \
 section's topic (e.g. "### Derivation" — never the literal word "heading"); \
-use **bold** only for occasional key emphasis. Add fenced code blocks with a \
+use **bold** only for occasional key emphasis. When the question is about a \
+flow, pipeline, decision tree, architecture, or hierarchy, include a simple \
+ASCII diagram in a fenced code block (boxes/labels with │ ▼ ├── └── arrows) — \
+but only when the structure is genuinely clearer drawn than described, never \
+for prose-only answers. Add fenced code blocks with a \
 language tag for any code.
 
 For mathematics, follow these rules exactly, or it will render as garbled \

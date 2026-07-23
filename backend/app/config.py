@@ -115,6 +115,10 @@ class Settings(BaseSettings):
     # info (see needs_web). $0.004 per search; keep results small.
     web_search_enabled: bool = True
     web_search_max_results: int = 3
+    # Cheap t=0 heuristic (OR'd with the bidder's needs_web flag): a query is
+    # assumed to need fresh data if it mentions a year at/after the tier-1
+    # models' knowledge cutoff. Bump this as the underlying models advance.
+    model_knowledge_cutoff_year: int = 2024
 
     # --- Deployment / abuse protection --------------------------------------
     # Shared access code required on every /api/* request (X-Access-Code

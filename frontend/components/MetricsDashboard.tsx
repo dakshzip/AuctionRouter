@@ -46,27 +46,28 @@ export function MetricsDashboard({ refreshKey }: { refreshKey: number }) {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat
-          label="avg cost / query"
+          label="cost per question"
           value={`$${metrics.avg_cost_usd.toFixed(4)}`}
-          sub={`total $${metrics.total_cost_usd.toFixed(4)}`}
+          sub={`total spent $${metrics.total_cost_usd.toFixed(4)}`}
         />
         <Stat
-          label="saved vs boss-only"
+          label="total savings"
           value={`$${metrics.total_saved_usd.toFixed(4)}`}
+          sub="vs always using the big model"
         />
         <Stat
-          label="avg latency"
+          label="avg answer time"
           value={`${(metrics.avg_latency_ms / 1000).toFixed(1)}s`}
         />
         <Stat
-          label="tier-1 clears"
+          label="answered by fast models"
           value={`${Math.round(metrics.tier1_resolution_rate * 100)}%`}
-          sub={`boss fights ${Math.round(metrics.escalation_rate * 100)}% · ${metrics.total_queries} queries`}
+          sub={`big model needed ${Math.round(metrics.escalation_rate * 100)}% · ${metrics.total_queries} questions`}
         />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Auction wins">
+        <Card title="Who answered the most">
           <div className="space-y-3">
             {Object.keys(MODEL_LABELS).map((key) => {
               const wins = metrics.wins_by_model[key] ?? 0;
@@ -83,7 +84,7 @@ export function MetricsDashboard({ refreshKey }: { refreshKey: number }) {
           </div>
         </Card>
 
-        <Card title="Verification pass rate">
+        <Card title="Answer quality (checks passed)">
           <div className="space-y-3">
             {Object.keys(MODEL_LABELS).map((key) => {
               const acc = metrics.accuracy_by_model[key];
