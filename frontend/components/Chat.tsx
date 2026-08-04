@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { streamQuery, type QueryHint } from "@/lib/api";
-import type { ChatTurn, RunResult } from "@/lib/types";
+import { copyText } from "@/lib/clipboard";
+import type { ChatTurn, RunResult, SourceImage } from "@/lib/types";
 import { Badge } from "./ui";
+import { ImageStrip } from "./ImageStrip";
 import { Markdown } from "./Markdown";
 
 interface ChatMessage {
@@ -21,6 +23,8 @@ interface LiveState {
   provisional: boolean;
   // Tail of GPT-5's streamed reasoning summary, when the provider sends one
   thinking: string;
+  // Web-search thumbnails, when the search turned up image-worthy results
+  images: SourceImage[];
 }
 
 // Condense raw reasoning into one short headline (GPT reasoning summaries
@@ -105,6 +109,78 @@ If a bidder flags that answering correctly needs current information -- breaking
 
 *Tip: try a toggle, ask a current-events question to watch it search, or ask something genuinely hard to summon the boss.*`;
 
+// Icon buttons under an answer. Same drawing conventions as the send arrow
+// below: 24-unit box, stroked not filled, rounded caps.
+function IconButton({
+  onClick,
+  title,
+  children,
+  active = false,
+}: {
+  onClick: () => void;
+  title: string;
+  children: ReactNode;
+  active?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={active ? "text-green-400" : "text-stone-600 hover:text-orange-400"}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-4 w-4"
+      >
+        {children}
+      </svg>
+    </button>
+  );
+}
+
+/** Copy the answer's raw markdown, with the same 1.5s ✓ as code blocks. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <IconButton
+      title={copied ? "copied" : "copy answer"}
+      active={copied}
+      onClick={async () => {
+        if (!(await copyText(text))) return;
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? (
+        <polyline points="20 6 9 17 4 12" />
+      ) : (
+        <>
+          <rect x="9" y="9" width="11" height="11" rx="2" />
+          <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+        </>
+      )}
+    </IconButton>
+  );
+}
+
+/** Two arcs chasing each other — the recycle/refresh glyph. */
+function RegenerateButton({ onClick }: { onClick: () => void }) {
+  return (
+    <IconButton onClick={onClick} title="regenerate">
+      <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-7.6-4.2" />
+      <polyline points="3 16 4.4 16.8 5.2 15.4" />
+      <path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 7.6 4.2" />
+      <polyline points="21 8 19.6 7.2 18.8 8.6" />
+    </IconButton>
+  );
+}
+
 export function Chat({
   onRun,
   selectedRunId,
@@ -119,6 +195,9 @@ export function Chat({
   const [live, setLive] = useState<LiveState | null>(null);
   const [hint, setHint] = useState<QueryHint>("general");
   const [tick, setTick] = useState(0);
+  // Inline prompt editing: index of the user message being edited, if any
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
   // Input-box placeholder rotates every 10s; starts on the greeting (idx 0)
   const [phIdx, setPhIdx] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -208,16 +287,66 @@ export function Chat({
       scroll();
       return;
     }
+    setInput("");
+    runQuery(query, messages);
+  }
+
+  // Abort handle for the in-flight stream; "stop generating" fires this
+  const abortRef = useRef<AbortController | null>(null);
+
+  function stop() {
+    abortRef.current?.abort();
+  }
+
+  function startEdit(i: number, text: string) {
+    if (live) return;
+    setEditingIdx(i);
+    setEditText(text);
+  }
+
+  function cancelEdit() {
+    setEditingIdx(null);
+    setEditText("");
+  }
+
+  /** Re-ask an edited question, dropping every turn that followed it. */
+  function submitEdit(i: number) {
+    const text = editText.trim();
+    const unchanged = text === messages[i]?.text;
+    cancelEdit();
+    if (!text || unchanged) return;
+    runQuery(text, messages.slice(0, i));
+  }
+
+  /** Re-ask the last question, dropping the answer it produced. */
+  function regenerate() {
+    if (live) return;
+    const idx = messages.map((m) => m.role).lastIndexOf("user");
+    if (idx < 0) return;
+    runQuery(messages[idx].text, messages.slice(0, idx));
+  }
+
+  /**
+   * Run `query` with `prefix` as the conversation before it.
+   *
+   * Taking the prefix as an argument rather than reading `messages` is what
+   * lets edit and regenerate rewrite history: they pass a truncated slice, and
+   * everything after the edited turn is dropped.
+   */
+  async function runQuery(query: string, prefix: ChatMessage[]) {
+    if (live) return;
     // Prior turns (excluding errors) give the pipeline conversation context
-    const history: ChatTurn[] = messages
+    const history: ChatTurn[] = prefix
       .filter((m) => m.role !== "error")
       .slice(-12)
       .map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.text.slice(0, 8000),
       }));
-    setInput("");
-    setMessages((m) => [...m, { role: "user", text: query }]);
+    // Assignment, not append — this is the truncation
+    setMessages([...prefix, { role: "user", text: query }]);
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLive({
       status: "⚡ AUCTION IN PROGRESS…",
       text: "",
@@ -226,10 +355,14 @@ export function Chat({
       // Hedge tokens stream during the auction, before any verdict
       provisional: true,
       thinking: "",
+      images: [],
     });
     scroll();
     try {
       await streamQuery(query, history, hint, (ev) => {
+        // A stopped stream can still have a queued event in flight; drop it
+        // rather than let it repopulate the bubble we just cleared.
+        if (controller.signal.aborted) return;
         switch (ev.type) {
           case "stage":
             if (ev.stage === "bidding")
@@ -271,6 +404,7 @@ export function Chat({
                 searching: false,
                 provisional: false,
                 thinking: "",
+                images: [],
               });
             }
             break;
@@ -280,7 +414,10 @@ export function Chat({
           case "reset":
             // The streamed provisional draft lost the auction — clear it
             pendingRef.current = "";
-            setLive((l) => l && { ...l, text: "" });
+            setLive((l) => l && { ...l, text: "", images: [] });
+            break;
+          case "images":
+            setLive((l) => l && { ...l, images: ev.images ?? [] });
             break;
           case "reasoning":
             reasoningRef.current = (
@@ -309,10 +446,16 @@ export function Chat({
             scroll();
             break;
         }
-      });
+      }, controller.signal);
     } catch (e) {
-      setMessages((m) => [...m, { role: "error", text: String(e) }]);
+      // A user-initiated stop is not a failure: the partial answer is
+      // discarded silently, leaving the question in place to retry or edit.
+      if (!controller.signal.aborted) {
+        setMessages((m) => [...m, { role: "error", text: String(e) }]);
+      }
     } finally {
+      pendingRef.current = "";
+      abortRef.current = null;
       setLive(null);
       scroll();
     }
@@ -320,9 +463,12 @@ export function Chat({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 space-y-4 overflow-y-auto pr-2">
+      <div className="flex-1 overflow-y-auto pr-2">
+        {/* Centered on the same axis as the composer, a touch narrower than
+            it (70rem) so the answers sit just inside the input pill. */}
+        <div className="mx-auto flex min-h-full w-full max-w-[66rem] flex-col space-y-4 px-3">
         {messages.length === 0 && !live && (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex flex-1 items-center justify-center">
             <div className="whitespace-nowrap px-5 text-center font-[family-name:var(--font-pixel)] text-sm leading-relaxed text-stone-300">
               No limits to curiosity. Ask anything.
             </div>
@@ -330,11 +476,57 @@ export function Chat({
         )}
         {messages.map((msg, i) =>
           msg.role === "user" ? (
-            <div key={i} className="flex justify-end">
-              <div className="max-w-[90%] rounded-full bg-orange-950/60 px-4 py-2 text-orange-100">
-                <span className="mr-1 text-orange-500">&gt;</span>
-                {msg.text}
-              </div>
+            <div key={i} className="group flex items-center justify-end gap-2">
+              {/* Edit affordance sits outside the pill, revealed on hover */}
+              {editingIdx === null && !live && (
+                <div className="opacity-0 transition-opacity group-hover:opacity-100">
+                  <IconButton
+                    title="edit prompt"
+                    onClick={() => startEdit(i, msg.text)}
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </IconButton>
+                </div>
+              )}
+              {editingIdx === i ? (
+                <div className="w-full max-w-[80%] rounded-2xl bg-orange-950/60 px-4 py-2 text-orange-100">
+                  <textarea
+                    autoFocus
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        submitEdit(i);
+                      } else if (e.key === "Escape") {
+                        cancelEdit();
+                      }
+                    }}
+                    rows={2}
+                    className="w-full resize-none bg-transparent text-orange-100 outline-none"
+                  />
+                  <div className="mt-1 flex justify-end gap-3 font-[family-name:var(--font-pixel)] text-[10px] uppercase">
+                    <button
+                      onClick={cancelEdit}
+                      className="text-stone-400 hover:text-stone-200"
+                    >
+                      cancel
+                    </button>
+                    <button
+                      onClick={() => submitEdit(i)}
+                      className="text-orange-400 hover:text-orange-300"
+                    >
+                      send
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="max-w-[80%] rounded-full bg-orange-950/60 px-4 py-2 text-orange-100">
+                  <span className="mr-1 text-orange-500">&gt;</span>
+                  {msg.text}
+                </div>
+              )}
             </div>
           ) : msg.role === "error" ? (
             <div
@@ -347,7 +539,7 @@ export function Chat({
             <div key={i} className="flex justify-start">
               <div
                 onClick={() => msg.run && onSelectRun(msg.run)}
-                className={`max-w-[48%] cursor-pointer select-text px-3 py-2 text-left ${
+                className={`w-full cursor-pointer select-text px-6 py-2 text-left ${
                   msg.run && msg.run.id === selectedRunId
                     ? "shadow-[inset_3px_0_0_0_#f97316]"
                     : "hover:shadow-[inset_3px_0_0_0_#57534e]"
@@ -368,14 +560,37 @@ export function Chat({
                 <div className="text-stone-200">
                   <Markdown>{msg.text}</Markdown>
                 </div>
+                <ImageStrip images={msg.run?.images} />
+                {/* Copy on every answer; regenerate only on the last, since
+                    re-asking mid-thread would discard the turns after it.
+                    Both hidden for /explain, which isn't pipeline output. */}
+                {!live && msg.text !== EXPLAIN_TEXT && (
+                  <div
+                    className="mt-2 flex items-center gap-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <CopyButton text={msg.text} />
+                    {i === messages.length - 1 && (
+                      <RegenerateButton onClick={regenerate} />
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ),
         )}
+        {/* Stopped mid-answer: the question is left standing on its own, so
+            offer the retry here rather than making the user retype it. */}
+        {!live && messages.length > 0 &&
+          messages[messages.length - 1].role === "user" && (
+            <div className="flex justify-start px-6">
+              <RegenerateButton onClick={regenerate} />
+            </div>
+          )}
         {live && (
           <div className="flex justify-start">
             <div
-              className={`max-w-[48%] px-3 py-2 ${
+              className={`w-full px-6 py-2 ${
                 live.escalating ? "bg-orange-950/20" : ""
               }`}
             >
@@ -405,10 +620,12 @@ export function Chat({
                   <Markdown highlight={false}>{live.text}</Markdown>
                 </div>
               )}
+              <ImageStrip images={live.images} />
             </div>
           </div>
         )}
         <div ref={bottomRef} />
+        </div>
       </div>
 
       <div className="mx-auto w-full max-w-[70rem]">
@@ -434,7 +651,7 @@ export function Chat({
           </button>
         ))}
       </div>
-      <div className="mt-4 flex items-center gap-3 pl-3">
+      <div className="mt-1.5 flex items-center gap-3 pl-3">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -448,22 +665,29 @@ export function Chat({
           placeholder={PLACEHOLDERS[phIdx]}
           className="w-full resize-none rounded-full bg-stone-900 px-6 py-3.5 text-left text-stone-100 outline-none placeholder:text-stone-400"
         />
+        {/* One button, two jobs: send when idle, stop while streaming —
+            it's the only control that stays live mid-answer. */}
         <button
-          onClick={send}
-          disabled={!!live || !input.trim()}
-          aria-label="send"
+          onClick={live ? stop : send}
+          disabled={!live && !input.trim()}
+          aria-label={live ? "stop generating" : "send"}
+          title={live ? "stop generating" : "send"}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-950 text-orange-400 hover:text-orange-300 disabled:cursor-not-allowed disabled:text-stone-600"
         >
           <svg
             viewBox="0 0 24 24"
-            fill="none"
+            fill={live ? "currentColor" : "none"}
             stroke="currentColor"
             strokeWidth={2.5}
             strokeLinecap="round"
             strokeLinejoin="round"
             className="h-5 w-5"
           >
-            <path d="M5 12h14M13 6l6 6-6 6" />
+            {live ? (
+              <rect x="7" y="7" width="10" height="10" rx="1.5" />
+            ) : (
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            )}
           </svg>
         </button>
       </div>

@@ -1,4 +1,4 @@
-import type { ChatTurn, MetricsSummary, RunResult } from "./types";
+import type { ChatTurn, MetricsSummary, RunResult, SourceImage } from "./types";
 
 // Same origin in production (FastAPI serves the static export);
 // the local backend during `next dev`. On Vercel this MUST be set to the
@@ -64,7 +64,7 @@ export function submitQuery(
 }
 
 export interface StreamEvent {
-  type: "stage" | "auction" | "token" | "reset" | "reasoning" | "verification" | "frontier_failed" | "error" | "done";
+  type: "stage" | "auction" | "token" | "reset" | "reasoning" | "verification" | "images" | "frontier_failed" | "error" | "done";
   stage?: "bidding" | "drafting" | "searching" | "verifying" | "delivering" | "escalating";
   model?: string;
   text?: string;
@@ -76,6 +76,7 @@ export interface StreamEvent {
   winner?: string | null;
   verified?: boolean;
   escalated?: boolean;
+  images?: SourceImage[];
   run?: RunResult;
 }
 
@@ -87,11 +88,15 @@ export async function streamQuery(
   history: ChatTurn[],
   hint: QueryHint,
   onEvent: (ev: StreamEvent) => void,
+  // Aborting rejects the in-flight reader.read() below, which surfaces to the
+  // caller as an AbortError — that's how "stop generating" unwinds
+  signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/api/query/stream`, {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ query, history, hint }),
+    signal,
   });
   if (res.status === 401) {
     handle401();
