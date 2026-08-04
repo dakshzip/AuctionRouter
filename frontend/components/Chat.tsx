@@ -557,7 +557,7 @@ export function Chat({
                     </span>
                   </div>
                 )}
-                <div className="text-stone-200">
+                <div className="text-stone-100">
                   <Markdown>{msg.text}</Markdown>
                 </div>
                 <ImageStrip images={msg.run?.images} />
@@ -616,7 +616,7 @@ export function Chat({
                 </div>
               )}
               {live.text && (
-                <div className="text-stone-200">
+                <div className="text-stone-100">
                   <Markdown highlight={false}>{live.text}</Markdown>
                 </div>
               )}
@@ -663,7 +663,9 @@ export function Chat({
           }}
           rows={1}
           placeholder={PLACEHOLDERS[phIdx]}
-          className="w-full resize-none rounded-full bg-stone-900 px-6 py-3.5 text-left text-stone-100 outline-none placeholder:text-stone-400"
+          // Sits between stone-900 (#1c1917) and stone-800 (#292524) — a full
+          // step to 800 reads as a different surface; this just lifts it.
+          className="w-full resize-none rounded-full bg-[#201d1b] px-6 py-3.5 text-left text-stone-100 outline-none placeholder:text-stone-400"
         />
         {/* One button, two jobs: send when idle, stop while streaming —
             it's the only control that stays live mid-answer. */}

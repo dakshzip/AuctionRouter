@@ -843,7 +843,8 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
     # would flash a stale "I don't know" to the user before the search kicks in.
     # We then go straight to the web-enabled draft after the auction.
     run_hedge = not _needs_web_heuristic(query)
-    if not run_hedge:
+    regex_web = not run_hedge
+    if regex_web:
         state["needs_web"] = True
 
     # The gate model races the hedge rather than preceding it: its TTFT is
@@ -852,26 +853,45 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
     # Skipped when the regex already decided — that answer costs nothing and
     # is never wrong in the "web needed" direction.
     gate_task = (asyncio.ensure_future(webgate.decide(query))
-                 if run_hedge and webgate.enabled() else None)
+                 if not regex_web and webgate.enabled() else None)
 
-    hedge_q: asyncio.Queue = asyncio.Queue()
+    def _start_hedge(web: bool) -> tuple[asyncio.Task, asyncio.Queue]:
+        """Launch a speculative draft, optionally web-grounded.
 
-    async def _hedge_stream():
-        try:
-            resp = None
-            async for ev in chat_stream(hedge_spec, prompts.ANSWER_SYSTEM,
-                                        query, history=state["history"],
-                                        prefer_paid=True):
-                if ev["type"] == "delta":
-                    hedge_q.put_nowait(("delta", ev["text"]))
-                elif ev["type"] == "final":
-                    resp = ev["response"]
-            hedge_q.put_nowait(("final", resp))
-        except Exception:
-            hedge_q.put_nowait(("final", None))
+        A web query used to run NO hedge at all, on the reasoning that a
+        no-web draft would flash something stale. True, but it left the
+        longest queries with nothing on screen: measured, the auction took
+        22s while the search and generation took 2.9s. The answer isn't to
+        skip the hedge, it's to give the hedge the web.
+        """
+        q: asyncio.Queue = asyncio.Queue()
 
-    hedge_task = asyncio.create_task(_hedge_stream()) if run_hedge else None
+        async def _run():
+            try:
+                resp = None
+                async for ev in chat_stream(hedge_spec, prompts.ANSWER_SYSTEM,
+                                            query, history=state["history"],
+                                            prefer_paid=True, web=web):
+                    if ev["type"] == "delta":
+                        q.put_nowait(("delta", ev["text"]))
+                    elif ev["type"] == "final":
+                        resp = ev["response"]
+                q.put_nowait(("final", resp))
+            except Exception:
+                q.put_nowait(("final", None))
+
+        return asyncio.create_task(_run()), q
+
+    hedge_is_web = regex_web
+    hedge_task, hedge_q = _start_hedge(web=regex_web)
+    run_hedge = True
     bid_task = asyncio.create_task(bid_collection(state))
+
+    if regex_web:
+        # Tell the UI a search is underway; the tokens that follow are already
+        # web-grounded rather than a draft awaiting replacement.
+        yield {"type": "stage", "stage": "searching",
+               "model": hedge_spec.display_name}
 
     yield {"type": "stage", "stage": "bidding"}
     # Forward hedge tokens the moment they exist, while bids come in
@@ -890,13 +910,16 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             if verdict is True:
                 gate_says_web = True
                 state["needs_web"] = True
-                if hedge_task is not None:
-                    hedge_task.cancel()
-                    hedge_task = None
-                run_hedge, hedge_done = False, True
+                # Swap the ungrounded hedge for a web-grounded one rather than
+                # abandoning generation until the auction: the search itself is
+                # fast (~3s), it was the bid wait that made web queries feel
+                # broken. Restarting here costs ~500ms of discarded tokens.
+                hedge_task.cancel()
                 yield {"type": "reset"}
-                yield {"type": "token",
-                       "text": "🔎 Let me search the web for you…\n\n"}
+                hedge_task, hedge_q = _start_hedge(web=True)
+                hedge_is_web = True
+                yield {"type": "stage", "stage": "searching",
+                       "model": hedge_spec.display_name}
         if not run_hedge:
             await asyncio.sleep(0.05)
             continue
@@ -930,11 +953,12 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
         "reason": state.get("escalation_reason"),
     }
 
-    # A needs_web winner can't use the hedge draft (generated at t=0 with no
-    # web access) — drop it and let the web-enabled draft path run instead.
+    # The hedge stands unless it's ungrounded on a query that turned out to
+    # need the web — a web-grounded hedge is exactly the draft we'd otherwise
+    # be about to run, so keeping it skips the whole second round-trip.
     hedge_won = (run_hedge and not state.get("escalated")
                  and state.get("winner") == hedge_key
-                 and not state.get("needs_web"))
+                 and (hedge_is_web or not state.get("needs_web")))
     if not hedge_won:
         # Another model won (or we're escalating): drop the hedge and
         # clear its provisional text on the client. If no hedge ran (t=0 web
