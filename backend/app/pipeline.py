@@ -376,37 +376,23 @@ def _admits_no_fresh_info(text: str) -> bool:
     return bool(_NO_FRESH_INFO.search(text or ""))
 
 
-def _start_image_search(state: dict) -> "Optional[asyncio.Task]":
-    """Kick off the image lookup so it runs alongside the draft.
+async def _collect_images(state: dict) -> list[SourceImage]:
+    """Search for images once the answer exists, so they can match it.
 
-    Idempotent: the task is stashed on the state, so the auction path and the
-    second-chance-web path can both call this without double-firing.
+    Deliberately NOT started earlier. Running it alongside the draft hid the
+    latency, but the only text available then is the question — and searching
+    the question returns whatever is most famous for it, not what this answer
+    says. "who won the world cup" fetched Argentina lifting the trophy under
+    an answer about Spain. The answer is worth the extra second.
     """
     if not state.get("wants_images") or not image_search_enabled():
-        return None
-    task = state.get("_image_task")
-    if task is None:
-        task = asyncio.ensure_future(search_images(state["query"]))
-        state["_image_task"] = task
-    return task
-
-
-async def _collect_images(state: dict) -> list[SourceImage]:
-    """Await the in-flight image lookup, giving up rather than stalling.
-
-    Capped at the search's own timeout, never below it: the lookup has been
-    running since the auction, so whatever is left of that budget is all the
-    delay this can add — and a shorter cap here would just discard results
-    the search was still entitled to fetch.
-    """
-    task = state.get("_image_task")
-    if task is None:
         return []
+    answer = state.get("final_answer") or state.get("draft_answer") or ""
     try:
-        return await asyncio.wait_for(asyncio.shield(task),
-                                      timeout=settings.image_search_timeout_s)
+        return await asyncio.wait_for(
+            search_images(state["query"], answer=answer),
+            timeout=settings.image_search_timeout_s)
     except Exception:  # timeout or a search failure — ship the answer anyway
-        task.cancel()
         return []
 
 
@@ -823,7 +809,8 @@ async def run_query(query: str, history: list[dict] | None = None,
     # Parity with the streaming path. Sequential here (the graph has already
     # finished) — this path is used by evals, not the latency-critical UI.
     if final.get("wants_images") and image_search_enabled():
-        final["images"] = await search_images(query)
+        final["images"] = await search_images(
+            query, answer=final.get("final_answer") or "")
     run = _make_run(query, final, start)
     _save_run_bg(run)
     return run
@@ -935,9 +922,6 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
     state["gate_web"] = gate_says_web
     state.update(bid_task.result())
     state.update(await auction(state))
-    # Fired here so Tavily runs concurrently with the draft — by the time the
-    # answer finishes streaming the images are already waiting.
-    _start_image_search(state)
     yield {
         "type": "auction",
         "bids": [b.model_dump() for b in state["bids"]],
@@ -1066,7 +1050,6 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
         if (any(b.wants_images for b in state.get("bids", []))
                 or _wants_images_heuristic(query)):
             state["wants_images"] = True
-            _start_image_search(state)
         spec = TIER1_MODELS[state["winner"]]
         yield {"type": "reset"}
         yield {"type": "stage", "stage": "searching", "model": spec.display_name}

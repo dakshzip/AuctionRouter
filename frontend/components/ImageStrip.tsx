@@ -25,7 +25,7 @@ export function ImageStrip({ images }: { images?: SourceImage[] }) {
           target="_blank"
           rel="noopener noreferrer"
           title={im.description || undefined}
-          className="shrink-0 border border-stone-800 hover:border-orange-700"
+          className="shrink-0 border border-stone-800 bg-stone-950 hover:border-orange-700"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -34,9 +34,12 @@ export function ImageStrip({ images }: { images?: SourceImage[] }) {
             loading="lazy"
             referrerPolicy="no-referrer"
             onError={() => setBroken((b) => new Set(b).add(im.url))}
+            // object-contain, not cover: these are photos of a specific thing,
+            // and cropping to fill the box cut the subject in half. Letterboxed
+            // against the tile background is the lesser evil.
             // body sets image-rendering: pixelated for the retro look —
             // photos need it off or they come out crunchy
-            className="h-28 w-40 object-cover [image-rendering:auto]"
+            className="h-44 w-60 object-contain [image-rendering:auto]"
           />
         </a>
       ))}
