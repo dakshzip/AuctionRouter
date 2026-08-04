@@ -24,6 +24,7 @@ from .config import (BASELINE_MODEL, SPECULATIVE_HINT_MODELS, TIER1_MODELS,
 from .llm import LLMError, chat, extract_json
 from .schemas import Bid, RunResult, SourceImage, Usage, Verification
 from .store import get_store
+from . import webgate
 from .websearch import enabled as image_search_enabled
 from .websearch import search_images
 
@@ -36,6 +37,7 @@ class RouterState(TypedDict, total=False):
     winner: Optional[str]
     needs_web: bool
     web_via_bidder: bool
+    gate_web: bool
     wants_images: bool
     images: list[SourceImage]
     draft_answer: Optional[str]
@@ -470,12 +472,16 @@ async def auction(state: RouterState) -> RouterState:
     # answer was written from stale training data, so discard it and force
     # a real (web-enabled) draft.
     regex_web = _needs_web_heuristic(state["query"])
-    needs_web = winner.needs_web or regex_web
+    # The gate model has already spoken by now (it resolves ~500ms in, well
+    # before the bids) and has far better recall than the regex on natural
+    # phrasing, so it joins the OR rather than replacing anything.
+    gate_web = bool(state.get("gate_web"))
+    needs_web = winner.needs_web or regex_web or gate_web
     out["needs_web"] = needs_web
-    # True when the upfront regex missed but a bidder flagged the query — the
-    # UI announces "let me search the web" in that case (regex hits go straight
-    # to the search silently, since we knew from the start).
-    out["web_via_bidder"] = needs_web and not regex_web
+    # True when neither the upfront regex nor the gate caught it but a bidder
+    # did — only then does the UI still owe the user a "let me search" line.
+    # Regex hits search silently; the gate already announced its own.
+    out["web_via_bidder"] = needs_web and not regex_web and not gate_web
     # Images ride along with a web search and never on their own: a picture
     # for a query we answered from training data would be unsourced, and
     # gating on needs_web caps image lookups at one per web-searched query.
@@ -853,6 +859,14 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
     if not run_hedge:
         state["needs_web"] = True
 
+    # The gate model races the hedge rather than preceding it: its TTFT is
+    # about the same as the hedge model's, so making the hedge wait would
+    # double time-to-first-token on every query that needs no search at all.
+    # Skipped when the regex already decided — that answer costs nothing and
+    # is never wrong in the "web needed" direction.
+    gate_task = (asyncio.ensure_future(webgate.decide(query))
+                 if run_hedge and webgate.enabled() else None)
+
     hedge_q: asyncio.Queue = asyncio.Queue()
 
     async def _hedge_stream():
@@ -876,7 +890,26 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
     # Forward hedge tokens the moment they exist, while bids come in
     hedge_final: Optional[object] = None
     hedge_done = not run_hedge
+    gate_says_web = False
     while not bid_task.done():
+        # Gate verdict usually lands ~500ms in, long before the bids. A "yes"
+        # kills the hedge here rather than at auction time, so the user sees a
+        # few hundred ms of doomed text instead of several seconds of it.
+        if gate_task is not None and gate_task.done():
+            verdict, gate_usage = gate_task.result()
+            gate_task = None
+            if gate_usage is not None:
+                state["usages"] = state["usages"] + [gate_usage]
+            if verdict is True:
+                gate_says_web = True
+                state["needs_web"] = True
+                if hedge_task is not None:
+                    hedge_task.cancel()
+                    hedge_task = None
+                run_hedge, hedge_done = False, True
+                yield {"type": "reset"}
+                yield {"type": "token",
+                       "text": "🔎 Let me search the web for you…\n\n"}
         if not run_hedge:
             await asyncio.sleep(0.05)
             continue
@@ -888,6 +921,18 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             yield {"type": "token", "text": val}
         else:
             hedge_final, hedge_done = val, True
+    # Bids won the race; collect the gate's verdict if it still has one
+    if gate_task is not None:
+        try:
+            verdict, gate_usage = await asyncio.wait_for(gate_task, timeout=0.5)
+            if gate_usage is not None:
+                state["usages"] = state["usages"] + [gate_usage]
+            if verdict is True:
+                gate_says_web = True
+                state["needs_web"] = True
+        except Exception:
+            pass  # no opinion; the regex and bidder flags still decide
+    state["gate_web"] = gate_says_web
     state.update(bid_task.result())
     state.update(await auction(state))
     # Fired here so Tavily runs concurrently with the draft — by the time the

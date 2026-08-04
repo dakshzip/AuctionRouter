@@ -101,6 +101,17 @@ VERIFIER_MODEL = ModelSpec(
     cost_per_mtok_out=0.30,
 )
 
+def _web_gate_model() -> "ModelSpec":
+    """Built after Settings so the model id stays overridable by env."""
+    return ModelSpec(
+        key="webgate",
+        openrouter_id=settings.web_gate_model_id,
+        display_name="Web gate",
+        cost_per_mtok_in=0.05,
+        cost_per_mtok_out=0.10,
+    )
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -119,6 +130,17 @@ class Settings(BaseSettings):
     # assumed to need fresh data if it mentions a year at/after the tier-1
     # models' knowledge cutoff. Bump this as the underlying models advance.
     model_knowledge_cutoff_year: int = 2024
+
+    # t=0 web-search gate: a tiny model answering one yes/no question, run in
+    # parallel with the hedge (see webgate.py for why parallel, not first).
+    # Granite 4.1 8B won on both axes in evals/bench_web_gate.py: 100% on
+    # held-out queries at ~450-500ms TTFT. Smaller models were not faster —
+    # provider routing dominates at this size — and 1B scored 40%.
+    web_gate_enabled: bool = True
+    web_gate_model_id: str = "ibm-granite/granite-4.1-8b"
+    # Generous vs the ~500ms typical: the gate races the bids either way, so a
+    # slow tail costs nothing, while a tight timeout would silently drop it.
+    web_gate_timeout_s: float = 3.0
 
     # Image search (Tavily). The OpenRouter web plugin returns no images, so
     # image-worthy web queries get one extra Tavily call of our own. An empty
@@ -234,6 +256,8 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+WEB_GATE_MODEL = _web_gate_model()
 
 
 # --- Tier 2: frontier escalation target -------------------------------------
