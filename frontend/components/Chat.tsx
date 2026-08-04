@@ -643,9 +643,11 @@ export function Chat({
           }}
           rows={1}
           placeholder={PLACEHOLDERS[phIdx]}
-          // ChatGPT's dark composer grey. Neutral rather than warm, so it
-          // reads as a distinct input surface against the stone background.
-          className="w-full resize-none rounded-full bg-[#303030] px-6 py-3.5 text-left text-stone-100 outline-none placeholder:text-stone-400"
+          // ChatGPT's composer is #303030 against a #212121 page — a small
+          // lift. This page is pure black (globals.css --background), so the
+          // same hex reads far brighter here. Matching the *contrast* rather
+          // than the value: neutral grey, barely above the background.
+          className="w-full resize-none rounded-full bg-[#1a1a1a] px-6 py-3.5 text-left text-stone-100 outline-none placeholder:text-stone-400"
         />
         {/* One button, two jobs: send when idle, stop while streaming —
             it's the only control that stays live mid-answer. */}
