@@ -141,7 +141,21 @@ async def search_images(query: str, limit: int | None = None,
     limit = limit or settings.image_search_max
     if not enabled() or not query.strip() or limit < 1:
         return []
-    subject = image_query(query, answer)
+    # Answer-derived first (accurate), question-derived second (reliable). A
+    # long specific sentence sometimes matches nothing at all, which showed up
+    # as the strip silently vanishing on queries that had images a moment ago.
+    attempts = [image_query(query, answer)]
+    fallback = search_subject(query)
+    if fallback and fallback != attempts[0]:
+        attempts.append(fallback)
+    for attempt in attempts:
+        images = await _search_once(attempt, limit)
+        if images:
+            return images
+    return []
+
+
+async def _search_once(subject: str, limit: int) -> list[SourceImage]:
     try:
         resp = await get_client().post(
             TAVILY_URL,
