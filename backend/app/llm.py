@@ -6,6 +6,8 @@ import re
 import time
 from typing import Any
 
+from urllib.parse import urlparse
+
 import httpx
 
 from .config import ModelSpec, settings
@@ -13,6 +15,56 @@ from .config import ModelSpec, settings
 
 class LLMError(Exception):
     pass
+
+
+def _citation_urls(annotations: list | None) -> list[str]:
+    """Pull the URLs out of OpenRouter's url_citation annotations."""
+    out: list[str] = []
+    for a in annotations or []:
+        if not isinstance(a, dict):
+            continue
+        cite = a.get("url_citation") or {}
+        url = cite.get("url") or ""
+        if url.startswith("http") and url not in out:
+            out.append(url)
+    return out
+
+
+# The web plugin writes citations as a bare domain in fullwidth brackets —
+# 【pmindia.gov.in】 — which renders as text that looks like a link but isn't.
+# The real URLs come back in message.annotations, so the two can be matched up.
+_CITE_MARKER = re.compile(r"【\s*([^【】\s]+?)\s*】")
+
+
+def link_citations(text: str, urls: list[str]) -> str:
+    """Turn 【domain】 markers into real markdown links.
+
+    Matches each marker to the annotation whose host it belongs to, so the
+    link lands on the actual cited page rather than the site's front door.
+    Markers with no matching annotation are left exactly as they are — a
+    plain-domain link would be a guess, and a wrong link is worse than none.
+    """
+    if not text or not urls:
+        return text
+    hosts = []
+    for u in urls:
+        try:
+            host = urlparse(u).netloc.lower()
+        except ValueError:
+            continue
+        hosts.append((host[4:] if host.startswith("www.") else host, u))
+
+    def repl(m: re.Match) -> str:
+        label = m.group(1)
+        # removeprefix, not lstrip: lstrip strips any of "w"/"." from the
+        # front, turning "wikipedia.org" into "ikipedia.org".
+        key = label.lower().removeprefix("www.")
+        for host, url in hosts:
+            if host == key or host.endswith("." + key) or key.endswith(host):
+                return f"[{label}]({url})"
+        return m.group(0)
+
+    return _CITE_MARKER.sub(repl, text)
 
 
 class LLMResponse:
@@ -127,9 +179,11 @@ async def chat(model: ModelSpec, system: str, user: str,
     if "error" in data:  # OpenRouter can embed provider errors in a 200
         raise LLMError(f"{model.openrouter_id}: {str(data['error'])[:300]}")
     try:
-        content = data["choices"][0]["message"]["content"] or ""
+        message = data["choices"][0]["message"]
+        content = message["content"] or ""
     except (KeyError, IndexError) as e:
         raise LLMError(f"{model.openrouter_id}: malformed response: {e}")
+    content = link_citations(content, _citation_urls(message.get("annotations")))
     usage = data.get("usage") or {}
     return LLMResponse(
         content=content,
@@ -159,6 +213,7 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
 
     start = time.monotonic()
     parts: list[str] = []
+    citation_urls: list[str] = []
     tokens_in = tokens_out = 0
     served = model.openrouter_id
 
@@ -195,6 +250,13 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
                 choices = data.get("choices") or []
                 if choices:
                     delta = choices[0].get("delta") or {}
+                    # Citations arrive alongside the deltas (or on the final
+                    # message); collected here so the completed answer can be
+                    # rewritten with real links below.
+                    for src in (delta, choices[0].get("message") or {}):
+                        for u in _citation_urls(src.get("annotations")):
+                            if u not in citation_urls:
+                                citation_urls.append(u)
                     thinking = delta.get("reasoning") or ""
                     if thinking:
                         # Reasoning summaries stream before content on
@@ -209,7 +271,9 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
     yield {
         "type": "final",
         "response": LLMResponse(
-            content="".join(parts),
+            # Deltas streamed raw; the finished answer gets real links. The
+            # client replaces the streamed text with this on `done`.
+            content=link_citations("".join(parts), citation_urls),
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             latency_ms=int((time.monotonic() - start) * 1000),
