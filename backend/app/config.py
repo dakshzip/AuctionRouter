@@ -120,6 +120,18 @@ class Settings(BaseSettings):
     # models' knowledge cutoff. Bump this as the underlying models advance.
     model_knowledge_cutoff_year: int = 2024
 
+    # Image search (Tavily). The OpenRouter web plugin returns no images, so
+    # image-worthy web queries get one extra Tavily call of our own. An empty
+    # key disables the feature silently — nothing else changes.
+    tavily_api_key: str = ""
+    image_search_enabled: bool = True
+    image_search_max: int = 3
+    # Generous: the lookup starts at auction time and is collected after the
+    # answer has streamed, so this budget almost never delays anything — but
+    # a cold connect while the answer stream saturates the loop can eat
+    # several seconds, and a stingy timeout silently drops the images.
+    image_search_timeout_s: float = 12.0
+
     # --- Deployment / abuse protection --------------------------------------
     # Shared access code required on every /api/* request (X-Access-Code
     # header). Empty string disables the gate (local dev convenience).

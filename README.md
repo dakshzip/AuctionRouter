@@ -193,6 +193,9 @@ by a number:
 3. **Settings → Variables and secrets:**
    - `OPENROUTER_API_KEY` *(secret)* — the credit-capped key
    - `ACCESS_CODE` *(secret)* — the shared demo code
+   - `TAVILY_API_KEY` *(secret, optional)* — enables the image strip under
+     web-search answers. Omit it and the feature stays off; nothing else
+     changes.
    - `ALLOWED_ORIGINS` *(variable)* — your Vercel URL (comma-separated)
    - `DAILY_SPEND_LIMIT_USD` *(variable)* — e.g. `20`
    - `MONGODB_URI` / `MONGODB_DB` *(optional)* — Atlas M0; else in-memory

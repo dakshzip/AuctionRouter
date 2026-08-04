@@ -31,6 +31,12 @@ export interface Usage {
   latency_ms: number;
 }
 
+export interface SourceImage {
+  url: string;
+  description: string;
+  source_url: string | null;
+}
+
 export interface RunResult {
   id: string;
   query: string;
@@ -43,6 +49,7 @@ export interface RunResult {
   winner: string | null;
   draft_answer: string | null;
   verification: Verification | null;
+  images?: SourceImage[];
   usages: Usage[];
   total_cost_usd: number;
   baseline_cost_usd: number;

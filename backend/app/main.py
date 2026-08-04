@@ -23,12 +23,14 @@ from .pipeline import run_query, run_query_stream  # noqa: E402
 from .schemas import MetricsSummary, QueryRequest, RunResult  # noqa: E402
 from .security import RATE_LIMITS, limiter, require_access, spend_guard  # noqa: E402
 from .store import get_store  # noqa: E402
+from .websearch import close_client as close_search_client  # noqa: E402
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
     await close_client()
+    await close_search_client()
 
 
 app = FastAPI(title="AuctionRouter", version="0.1.0", lifespan=lifespan)
@@ -55,6 +57,8 @@ async def health():
         "status": "ok",
         "openrouter_key_set": bool(settings.openrouter_api_key),
         "access_required": bool(settings.access_code),
+        "image_search": bool(settings.image_search_enabled
+                             and settings.tavily_api_key),
         "store": "mongodb" if settings.mongodb_uri else "memory",
         "tier1_models": [m.openrouter_id for m in TIER1_MODELS.values()],
         "verifier": VERIFIER_MODEL.openrouter_id,

@@ -31,6 +31,14 @@ class Bid(BaseModel):
     error: Optional[str] = None       # set when a bidder failed / timed out
     draft_answer: Optional[str] = None  # speculative answer from a confident bidder
     needs_web: bool = False           # query needs fresh/real-time info
+    wants_images: bool = False        # photos would genuinely help the answer
+
+
+class SourceImage(BaseModel):
+    """One picture harvested from the image search (see websearch.py)."""
+    url: str
+    description: str = ""
+    source_url: Optional[str] = None  # page the image came from, when known
 
 
 class Verification(BaseModel):
@@ -61,6 +69,7 @@ class RunResult(BaseModel):
     winner: Optional[str] = None      # model_key of auction winner
     draft_answer: Optional[str] = None
     verification: Optional[Verification] = None
+    images: list[SourceImage] = []     # shown under the answer, web queries only
     usages: list[Usage] = []
     total_cost_usd: float = 0.0
     baseline_cost_usd: float = 0.0    # what frontier-only would have cost

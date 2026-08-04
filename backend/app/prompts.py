@@ -153,6 +153,15 @@ problem ("LeetCode 3499"), a specific product/version/paper/API/library \
 release, or any named entry that may postdate your training. Do NOT invent \
 its details or claim it "does not exist" from memory — look it up. False \
 only for genuinely timeless questions>,
+ "wants_images": <true if seeing two or three photographs alongside the answer \
+would help the user. ALWAYS true when the query asks what something or \
+someone LOOKS like, asks to SEE or SHOW something, or asks for photos, \
+pictures, or images. ALWAYS true when the subject is a physical thing a \
+photo would depict: a named person, place, city, building, landmark, product, \
+phone, car, animal, plant, artwork, logo, or a news or sports event people \
+watched happen. False for code, math, logic, definitions, advice, writing, \
+opinions, step-by-step instructions, prices, scores, weather, and anything \
+with no physical appearance>,
  "reason": "<one short sentence explaining your bid>"}
 
 If (and only if) your confidence is 0.8 or higher, then after the JSON object \

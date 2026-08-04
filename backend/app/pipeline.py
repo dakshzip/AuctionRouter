@@ -22,8 +22,10 @@ from . import prompts
 from .config import (BASELINE_MODEL, SPECULATIVE_HINT_MODELS, TIER1_MODELS,
                      TIER2_MODEL, VERIFIER_MODEL, settings)
 from .llm import LLMError, chat, extract_json
-from .schemas import Bid, RunResult, Usage, Verification
+from .schemas import Bid, RunResult, SourceImage, Usage, Verification
 from .store import get_store
+from .websearch import enabled as image_search_enabled
+from .websearch import search_images
 
 
 class RouterState(TypedDict, total=False):
@@ -34,6 +36,8 @@ class RouterState(TypedDict, total=False):
     winner: Optional[str]
     needs_web: bool
     web_via_bidder: bool
+    wants_images: bool
+    images: list[SourceImage]
     draft_answer: Optional[str]
     verification: Optional[Verification]
     escalated: bool
@@ -92,6 +96,7 @@ async def _get_bid(model_key: str, query: str,
             historical_accuracy=hist,
             draft_answer=speculative,
             needs_web=bool(data.get("needs_web", False)),
+            wants_images=bool(data.get("wants_images", False)),
         )
         usage = Usage(
             model_key=model_key, model_name=spec.display_name, stage="bid",
@@ -291,6 +296,59 @@ def _needs_web_heuristic(query: str) -> bool:
     return bool(_CURRENT_STATE.search(query)) and not years
 
 
+# Visual-intent gate: does this query have a subject a photograph could show?
+#
+# Same belt-and-braces as _needs_web_heuristic above, and for the same reason.
+# Bidders set wants_images reliably when the user says "show me" or "what does
+# X look like", but they miss the implicit cases — a named office-holder, a
+# launch, a final — and they disagree with each other on identical queries. A
+# regex can't be inconsistent, so it OR's in as pure recall.
+#
+# The negative list is load-bearing: it's what keeps prices, scores, weather
+# and how-to questions from dragging in decorative stock photos.
+_NOT_VISUAL = re.compile(r"""(?ix)
+    \b(?: price | cost | worth | score | odds | rate | percent | statistics
+        | weather | forecast | temperature | time\s+in )\b
+  | \b(?: how\s+(?:to|do|does|can) | explain | define | definition | meaning
+        | why\s+(?:is|do|does) | summarize | translate )\b
+  | \b(?: code | function | algorithm | bug | error | api | library | syntax
+        | equation | formula | derivative | integral | proof )\b
+""")
+
+_VISUAL_INTENT = re.compile(r"""(?ix)
+    # explicit asks (the bidders already catch these; cheap to double up)
+    \b(?: show\s+me | let\s+me\s+see | i\s+wan(?:t\s+to|na)\s+see )\b
+  | \b(?: photos? | pictures? | pics? | images? | screenshots? )\s+of\b
+  | \b what\s+(?:does|do|did)\b .{0,60}? \b looks?\s+like\b
+  # a named person occupying a role — "who is the PM of Japan"
+  | \b who(?:\s+is|'s|\s+are)\b
+  # things people watch happen
+  | \b(?: launch | liftoff | landing | eruption | hurricane | wildfire
+        | parade | ceremony | protest | concert | festival
+        | final | finals | match | game | race | tournament | olympics
+        | world\s+cup | super\s+bowl | championship )\b
+  # places and built things
+  | \b(?: skyline | stadium | museum | cathedral | temple | palace | bridge
+        | landmark | monument | statue )\b
+  | \b(?: visit | travel\s+to | places?\s+(?:to\s+visit|in) )\b
+  # physical objects whose whole point is how they look
+  | \b(?: design | designs | colou?rs?\s+(?:of|available) | unveiled
+        | new\s+(?:model|version)\s+of )\b
+""")
+
+
+def _wants_images_heuristic(query: str) -> bool:
+    """Cheap (~µs, no API) check for whether photos would suit this query.
+
+    OR'd with the bidders' wants_images flags, so it only adds recall. The
+    negative patterns win outright — "price of the new iPhone" is a number
+    question that happens to name a photogenic object.
+    """
+    if _NOT_VISUAL.search(query):
+        return False
+    return bool(_VISUAL_INTENT.search(query))
+
+
 # Draft self-admission that it lacks fresh info — the fallback when both the
 # regex and the bidder missed. If the model's own answer says "as of my
 # training / I don't have real-time data / hasn't happened yet / I'm not sure",
@@ -314,6 +372,40 @@ _NO_FRESH_INFO = re.compile(r"""(?ix)
 
 def _admits_no_fresh_info(text: str) -> bool:
     return bool(_NO_FRESH_INFO.search(text or ""))
+
+
+def _start_image_search(state: dict) -> "Optional[asyncio.Task]":
+    """Kick off the image lookup so it runs alongside the draft.
+
+    Idempotent: the task is stashed on the state, so the auction path and the
+    second-chance-web path can both call this without double-firing.
+    """
+    if not state.get("wants_images") or not image_search_enabled():
+        return None
+    task = state.get("_image_task")
+    if task is None:
+        task = asyncio.ensure_future(search_images(state["query"]))
+        state["_image_task"] = task
+    return task
+
+
+async def _collect_images(state: dict) -> list[SourceImage]:
+    """Await the in-flight image lookup, giving up rather than stalling.
+
+    Capped at the search's own timeout, never below it: the lookup has been
+    running since the auction, so whatever is left of that budget is all the
+    delay this can add — and a shorter cap here would just discard results
+    the search was still entitled to fetch.
+    """
+    task = state.get("_image_task")
+    if task is None:
+        return []
+    try:
+        return await asyncio.wait_for(asyncio.shield(task),
+                                      timeout=settings.image_search_timeout_s)
+    except Exception:  # timeout or a search failure — ship the answer anyway
+        task.cancel()
+        return []
 
 
 # Teaching-style queries deserve the full step-by-step multi-diagram treatment.
@@ -384,6 +476,16 @@ async def auction(state: RouterState) -> RouterState:
     # UI announces "let me search the web" in that case (regex hits go straight
     # to the search silently, since we knew from the start).
     out["web_via_bidder"] = needs_web and not regex_web
+    # Images ride along with a web search and never on their own: a picture
+    # for a query we answered from training data would be unsourced, and
+    # gating on needs_web caps image lookups at one per web-searched query.
+    # ANY bidder's flag counts, OR'd with the regex — bidders disagree with
+    # each other on identical queries and miss implicit subjects (a named
+    # office-holder, a rocket launch), so neither signal alone is enough.
+    out["wants_images"] = (
+        (any(b.wants_images for b in valid)
+         or _wants_images_heuristic(state["query"]))
+        and needs_web)
     # Teaching-style queries skip the bid-inline answer too: the bidding
     # context compresses it, while a dedicated ANSWER_SYSTEM draft call gives
     # the full step-by-step multi-diagram style.
@@ -659,6 +761,7 @@ def _make_run(query: str, final: dict, start: float) -> RunResult:
         winner=final.get("winner"),
         draft_answer=final.get("draft_answer"),
         verification=final.get("verification"),
+        images=final.get("images", []),
         usages=usages,
         total_cost_usd=round(total_cost, 6),
         baseline_cost_usd=round(baseline_cost, 6),
@@ -711,6 +814,10 @@ async def run_query(query: str, history: list[dict] | None = None,
                           "hint_model": SPECULATIVE_HINT_MODELS.get(hint, "gpt-oss"),
                           "usages": [], "escalated": False}
     final = await get_graph().ainvoke(state)
+    # Parity with the streaming path. Sequential here (the graph has already
+    # finished) — this path is used by evals, not the latency-critical UI.
+    if final.get("wants_images") and image_search_enabled():
+        final["images"] = await search_images(query)
     run = _make_run(query, final, start)
     _save_run_bg(run)
     return run
@@ -783,6 +890,9 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             hedge_final, hedge_done = val, True
     state.update(bid_task.result())
     state.update(await auction(state))
+    # Fired here so Tavily runs concurrently with the draft — by the time the
+    # answer finishes streaming the images are already waiting.
+    _start_image_search(state)
     yield {
         "type": "auction",
         "bids": [b.model_dump() for b in state["bids"]],
@@ -906,6 +1016,12 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             and _admits_no_fresh_info(state["draft_answer"])):
         state["needs_web"] = True
         state.pop("verification", None)
+        # needs_web only became true now, so the auction's image gate (which
+        # requires it) said no. Re-evaluate against the bidders + the regex.
+        if (any(b.wants_images for b in state.get("bids", []))
+                or _wants_images_heuristic(query)):
+            state["wants_images"] = True
+            _start_image_search(state)
         spec = TIER1_MODELS[state["winner"]]
         yield {"type": "reset"}
         yield {"type": "stage", "stage": "searching", "model": spec.display_name}
@@ -997,6 +1113,14 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                 return
     else:
         state.update(await finalize(state))
+
+    # Images last, under the finished answer. An empty result yields nothing —
+    # the model wanting pictures doesn't mean the search found usable ones.
+    images = await _collect_images(state)
+    if images:
+        state["images"] = images
+        yield {"type": "images",
+               "images": [im.model_dump(mode="json") for im in images]}
 
     run = _make_run(query, state, start)
     _save_run_bg(run)
