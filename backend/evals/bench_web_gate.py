@@ -92,24 +92,27 @@ def load_labelled() -> list[tuple[str, bool]]:
 
 
 async def probe(client: httpx.AsyncClient, model: str, query: str,
-                key: str) -> tuple[float | None, bool | None]:
-    """One streamed call. Returns (ttft_ms, answered_yes)."""
+                key: str, max_tokens: int = 32,
+                effort: str = "low") -> tuple[float | None, bool | None]:
+    """One streamed call. Returns (ttft_ms, answered_yes).
+
+    max_tokens/effort are tunable because reasoning models spend the budget
+    thinking before any content appears: gpt-5-nano emits 400-1400 reasoning
+    tokens at default effort, so a small cap returns nothing at all.
+    """
     body = {
         "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": query},
         ],
-        # Generous enough that a reasoning model can think and still emit its
-        # answer — otherwise it burns the budget internally and returns empty,
-        # which would look like a failure rather than the latency cost it is.
-        "max_tokens": 32,
+        "max_tokens": max_tokens,
         "temperature": 0,
         "stream": True,
         # Route to the fastest provider, matching how the app already routes
         "provider": {"sort": "latency"},
         # Thinking tokens would dominate TTFT; off wherever supported
-        "reasoning": {"effort": "low", "exclude": True},
+        "reasoning": {"effort": effort, "exclude": True},
     }
     start = time.monotonic()
     ttft = None
@@ -149,14 +152,16 @@ async def probe(client: httpx.AsyncClient, model: str, query: str,
 
 
 async def bench(model: str, data: list[tuple[str, bool]], key: str,
-                repeat: int) -> dict:
+                repeat: int, max_tokens: int = 32,
+                effort: str = "low") -> dict:
     ttfts: list[float] = []
     correct = wrong = unparsed = failed = 0
     misses: list[str] = []
     async with httpx.AsyncClient() as client:
         for _ in range(repeat):
             for q, truth in data:
-                ttft, yes = await probe(client, model, q, key)
+                ttft, yes = await probe(client, model, q, key,
+                                        max_tokens, effort)
                 if ttft is None:
                     failed += 1
                     continue
@@ -188,6 +193,11 @@ async def main() -> None:
     ap.add_argument("--models", default=",".join(CANDIDATES))
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--limit", type=int, default=0, help="cap queries, for smoke runs")
+    ap.add_argument("--max-tokens", type=int, default=32,
+                    help="raise for reasoning models, which spend the budget "
+                         "thinking before emitting any content")
+    ap.add_argument("--effort", default="low",
+                    help="reasoning effort; 'minimal' skips thinking on gpt-5*")
     ap.add_argument("--dataset", choices=["pinned", "heldout"], default="heldout",
                     help="'pinned' is the regex's own test set (it scores 100%% "
                          "there by construction); 'heldout' is the fair test")
@@ -215,7 +225,8 @@ async def main() -> None:
 
     results = []
     for model in args.models.split(","):
-        r = await bench(model.strip(), data, key, args.repeat)
+        r = await bench(model.strip(), data, key, args.repeat,
+                        args.max_tokens, args.effort)
         results.append(r)
         p50 = f"{r['p50']:6.0f}" if r["p50"] else "   n/a"
         p95 = f"{r['p95']:6.0f}" if r["p95"] else "   n/a"
