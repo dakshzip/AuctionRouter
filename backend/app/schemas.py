@@ -50,7 +50,7 @@ class Verification(BaseModel):
 class Usage(BaseModel):
     model_key: str
     model_name: str
-    stage: Literal["bid", "draft", "verify", "escalate"]
+    stage: Literal["bid", "draft", "verify", "escalate", "gate"]
     tokens_in: int = 0
     tokens_out: int = 0
     cost_usd: float = 0.0

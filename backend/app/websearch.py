@@ -67,6 +67,42 @@ def search_subject(query: str) -> str:
     return subject if len(subject) >= 3 else query.strip()
 
 
+# Markdown the answer may open with, stripped so it doesn't reach the search
+_MD = re.compile(r"[*_`#>\[\]]|\\\(|\\\)|\$\$?")
+
+
+def image_query(query: str, answer: str | None = None) -> str:
+    """What to actually search for images of.
+
+    The question is the wrong thing to search: "who won the world cup" returns
+    the most famous winner, not the one this answer names. The answer's opening
+    sentence carries the entity the user is actually being told about, so it
+    makes a far better image query — "Spain won the 2026 FIFA World Cup" finds
+    Spain, where the bare question finds Argentina.
+    """
+    subject = search_subject(query)
+    if not answer:
+        return subject
+    # First sentence of the first real paragraph, de-marked-down
+    body = _MD.sub("", answer).strip()
+    first = ""
+    for line in body.splitlines():
+        line = line.strip()
+        if line:
+            first = line
+            break
+    for stop in (". ", "! ", "? "):
+        idx = first.find(stop)
+        if idx > 0:
+            first = first[:idx]
+            break
+    first = first.strip(" .!?,:;")[:120]
+    # Too short to identify anything on its own — keep the question's subject
+    if len(first) < 15:
+        return subject
+    return first
+
+
 def _parse(data: dict, limit: int) -> list[SourceImage]:
     """Map Tavily's `images` array to SourceImages, dropping junk.
 
@@ -94,12 +130,32 @@ def _parse(data: dict, limit: int) -> list[SourceImage]:
     return out
 
 
-async def search_images(query: str, limit: int | None = None) -> list[SourceImage]:
-    """Fetch up to `limit` images for a query. Never raises."""
+async def search_images(query: str, limit: int | None = None,
+                        answer: str | None = None) -> list[SourceImage]:
+    """Fetch up to `limit` images. Never raises.
+
+    Pass `answer` whenever it exists: images are only as relevant as the text
+    they are searched with, and the answer names the entity the question only
+    gestures at.
+    """
     limit = limit or settings.image_search_max
     if not enabled() or not query.strip() or limit < 1:
         return []
-    subject = search_subject(query)
+    # Answer-derived first (accurate), question-derived second (reliable). A
+    # long specific sentence sometimes matches nothing at all, which showed up
+    # as the strip silently vanishing on queries that had images a moment ago.
+    attempts = [image_query(query, answer)]
+    fallback = search_subject(query)
+    if fallback and fallback != attempts[0]:
+        attempts.append(fallback)
+    for attempt in attempts:
+        images = await _search_once(attempt, limit)
+        if images:
+            return images
+    return []
+
+
+async def _search_once(subject: str, limit: int) -> list[SourceImage]:
     try:
         resp = await get_client().post(
             TAVILY_URL,

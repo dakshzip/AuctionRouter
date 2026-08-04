@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { streamQuery, type QueryHint } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { CheckIcon, CopyIcon, PencilIcon, RegenerateIcon } from "./icons";
 import type { ChatTurn, RunResult, SourceImage } from "@/lib/types";
 import { Badge } from "./ui";
 import { ImageStrip } from "./ImageStrip";
@@ -109,8 +110,8 @@ If a bidder flags that answering correctly needs current information -- breaking
 
 *Tip: try a toggle, ask a current-events question to watch it search, or ask something genuinely hard to summon the boss.*`;
 
-// Icon buttons under an answer. Same drawing conventions as the send arrow
-// below: 24-unit box, stroked not filled, rounded caps.
+// Icon buttons under an answer. Glyphs live in ./icons so the code-block
+// copy button in Markdown.tsx draws from the same set.
 function IconButton({
   onClick,
   title,
@@ -127,24 +128,15 @@ function IconButton({
       onClick={onClick}
       title={title}
       aria-label={title}
-      className={active ? "text-green-400" : "text-stone-600 hover:text-orange-400"}
+      // Confirmation lands in GAVL orange rather than a generic green
+      className={active ? "text-orange-400" : "text-stone-600 hover:text-orange-400"}
     >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-4 w-4"
-      >
-        {children}
-      </svg>
+      {children}
     </button>
   );
 }
 
-/** Copy the answer's raw markdown, with the same 1.5s ✓ as code blocks. */
+/** Copy the answer's raw markdown, with the same 1.5s tick as code blocks. */
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -157,26 +149,15 @@ function CopyButton({ text }: { text: string }) {
         setTimeout(() => setCopied(false), 1500);
       }}
     >
-      {copied ? (
-        <polyline points="20 6 9 17 4 12" />
-      ) : (
-        <>
-          <rect x="9" y="9" width="11" height="11" rx="2" />
-          <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-        </>
-      )}
+      {copied ? <CheckIcon /> : <CopyIcon />}
     </IconButton>
   );
 }
 
-/** Two arcs chasing each other — the recycle/refresh glyph. */
 function RegenerateButton({ onClick }: { onClick: () => void }) {
   return (
     <IconButton onClick={onClick} title="regenerate">
-      <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-7.6-4.2" />
-      <polyline points="3 16 4.4 16.8 5.2 15.4" />
-      <path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 7.6 4.2" />
-      <polyline points="21 8 19.6 7.2 18.8 8.6" />
+      <RegenerateIcon />
     </IconButton>
   );
 }
@@ -484,8 +465,7 @@ export function Chat({
                     title="edit prompt"
                     onClick={() => startEdit(i, msg.text)}
                   >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    <PencilIcon />
                   </IconButton>
                 </div>
               )}
@@ -557,7 +537,7 @@ export function Chat({
                     </span>
                   </div>
                 )}
-                <div className="text-stone-200">
+                <div className="text-stone-100">
                   <Markdown>{msg.text}</Markdown>
                 </div>
                 <ImageStrip images={msg.run?.images} />
@@ -616,7 +596,7 @@ export function Chat({
                 </div>
               )}
               {live.text && (
-                <div className="text-stone-200">
+                <div className="text-stone-100">
                   <Markdown highlight={false}>{live.text}</Markdown>
                 </div>
               )}
@@ -663,7 +643,11 @@ export function Chat({
           }}
           rows={1}
           placeholder={PLACEHOLDERS[phIdx]}
-          className="w-full resize-none rounded-full bg-stone-900 px-6 py-3.5 text-left text-stone-100 outline-none placeholder:text-stone-400"
+          // ChatGPT's composer is #303030 against a #212121 page — a small
+          // lift. This page is pure black (globals.css --background), so the
+          // same hex reads far brighter here. Matching the *contrast* rather
+          // than the value: neutral grey, barely above the background.
+          className="w-full resize-none rounded-full bg-[#1a1a1a] px-6 py-3.5 text-left text-stone-100 outline-none placeholder:text-stone-400"
         />
         {/* One button, two jobs: send when idle, stop while streaming —
             it's the only control that stays live mid-answer. */}

@@ -25,7 +25,8 @@ export function ImageStrip({ images }: { images?: SourceImage[] }) {
           target="_blank"
           rel="noopener noreferrer"
           title={im.description || undefined}
-          className="shrink-0 border border-stone-800 hover:border-orange-700"
+          // overflow-hidden so the image is clipped to the rounded corners
+          className="shrink-0 overflow-hidden rounded-xl border border-stone-800 bg-stone-950 hover:border-orange-700"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -34,9 +35,13 @@ export function ImageStrip({ images }: { images?: SourceImage[] }) {
             loading="lazy"
             referrerPolicy="no-referrer"
             onError={() => setBroken((b) => new Set(b).add(im.url))}
+            // object-cover fills the tile with no letterboxing. The 4:3 tile is
+            // close to how most web photos are framed, so the crop stays
+            // shallow — object-contain avoided cropping entirely but left dead
+            // space around anything that wasn't 4:3.
             // body sets image-rendering: pixelated for the retro look —
             // photos need it off or they come out crunchy
-            className="h-28 w-40 object-cover [image-rendering:auto]"
+            className="h-44 w-60 object-cover object-center [image-rendering:auto]"
           />
         </a>
       ))}
