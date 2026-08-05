@@ -113,7 +113,13 @@ def _web_gate_model() -> "ModelSpec":
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # str_strip_whitespace: secrets pasted into a hosting provider's UI pick up
+    # trailing newlines alarmingly easily, and a key with "\n" on the end makes
+    # an illegal Authorization header — httpx refuses to send it, so every call
+    # fails before leaving the process. Cost us a day of "the key is set but
+    # images never appear" in production.
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore",
+                                      str_strip_whitespace=True)
 
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
