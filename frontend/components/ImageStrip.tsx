@@ -35,13 +35,14 @@ export function ImageStrip({ images }: { images?: SourceImage[] }) {
             loading="lazy"
             referrerPolicy="no-referrer"
             onError={() => setBroken((b) => new Set(b).add(im.url))}
-            // object-cover fills the tile with no letterboxing. The 4:3 tile is
-            // close to how most web photos are framed, so the crop stays
-            // shallow — object-contain avoided cropping entirely but left dead
-            // space around anything that wasn't 4:3.
+            // Fixed height, natural width — the tile takes the image's own
+            // aspect ratio instead of imposing one. Any fixed w/h pair forces
+            // a choice between cropping (object-cover) and dead space
+            // (object-contain); letting width follow the image avoids both.
+            // max-w caps a panorama from running away with the row.
             // body sets image-rendering: pixelated for the retro look —
             // photos need it off or they come out crunchy
-            className="h-44 w-60 object-cover object-center [image-rendering:auto]"
+            className="h-44 w-auto max-w-[22rem] [image-rendering:auto]"
           />
         </a>
       ))}
