@@ -16,8 +16,32 @@ def test_marker_becomes_a_link_to_the_deep_url():
     out = link_citations(
         "Narendra Modi is the Prime Minister of India【pmindia.gov.in】",
         [PM])
+    # note the inserted space: the model glues the marker onto the last word
     assert out == (
-        f"Narendra Modi is the Prime Minister of India[pmindia.gov.in]({PM})")
+        f"Narendra Modi is the Prime Minister of India [pmindia.gov.in]({PM})")
+
+
+def test_space_inserted_only_when_needed():
+    # "Forcesen.wikipedia.org" was the reported symptom
+    glued = link_citations("the Self-Defence Forces【wikipedia.org】", [WIKI])
+    assert "Forces [wikipedia.org]" in glued
+    # already spaced -> no double space
+    spaced = link_citations("the Self-Defence Forces 【wikipedia.org】", [WIKI])
+    assert "Forces  [" not in spaced
+    assert "Forces [wikipedia.org]" in spaced
+
+
+def test_title_rides_along_for_the_hover_card():
+    out = link_citations("x【pmindia.gov.in】",
+                         [{"url": PM, "title": "Know the PM"}])
+    assert out == f'x [pmindia.gov.in]({PM} "Know the PM")'
+
+
+def test_quotes_in_title_are_neutralised():
+    # a raw double quote would terminate the markdown title early
+    out = link_citations("x【pmindia.gov.in】",
+                         [{"url": PM, "title": 'The "PM" profile'}])
+    assert '"The \'PM\' profile"' in out
 
 
 def test_multiple_markers_each_match_their_own_host():

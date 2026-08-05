@@ -17,17 +17,28 @@ class LLMError(Exception):
     pass
 
 
-def _citation_urls(annotations: list | None) -> list[str]:
-    """Pull the URLs out of OpenRouter's url_citation annotations."""
-    out: list[str] = []
+def _citation_items(annotations: list | None) -> list[dict]:
+    """Pull {url, title} out of OpenRouter's url_citation annotations.
+
+    The title is what the hover preview shows, so it's carried alongside the
+    URL rather than thrown away with the rest of the annotation.
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
     for a in annotations or []:
         if not isinstance(a, dict):
             continue
         cite = a.get("url_citation") or {}
         url = cite.get("url") or ""
-        if url.startswith("http") and url not in out:
-            out.append(url)
+        if not url.startswith("http") or url in seen:
+            continue
+        seen.add(url)
+        out.append({"url": url, "title": str(cite.get("title") or "")[:160]})
     return out
+
+
+def _citation_urls(annotations: list | None) -> list[str]:
+    return [c["url"] for c in _citation_items(annotations)]
 
 
 # The web plugin writes citations as a bare domain in fullwidth brackets —
@@ -36,33 +47,50 @@ def _citation_urls(annotations: list | None) -> list[str]:
 _CITE_MARKER = re.compile(r"【\s*([^【】\s]+?)\s*】")
 
 
-def link_citations(text: str, urls: list[str]) -> str:
+def link_citations(text: str, citations: list) -> str:
     """Turn 【domain】 markers into real markdown links.
 
     Matches each marker to the annotation whose host it belongs to, so the
     link lands on the actual cited page rather than the site's front door.
     Markers with no matching annotation are left exactly as they are — a
     plain-domain link would be a guess, and a wrong link is worse than none.
+
+    The annotation title rides along as the link's markdown title, which is
+    what the frontend's hover preview reads. Accepts either {url, title}
+    dicts or bare URL strings.
     """
-    if not text or not urls:
+    if not text or not citations:
         return text
     hosts = []
-    for u in urls:
+    for c in citations:
+        item = {"url": c, "title": ""} if isinstance(c, str) else c
         try:
-            host = urlparse(u).netloc.lower()
-        except ValueError:
+            host = urlparse(item["url"]).netloc.lower()
+        except (ValueError, KeyError, TypeError):
             continue
-        hosts.append((host[4:] if host.startswith("www.") else host, u))
+        hosts.append((host.removeprefix("www."), item))
 
     def repl(m: re.Match) -> str:
         label = m.group(1)
         # removeprefix, not lstrip: lstrip strips any of "w"/"." from the
         # front, turning "wikipedia.org" into "ikipedia.org".
         key = label.lower().removeprefix("www.")
-        for host, url in hosts:
-            if host == key or host.endswith("." + key) or key.endswith(host):
-                return f"[{label}]({url})"
-        return m.group(0)
+        matches = [item for host, item in hosts
+                   if host == key or host.endswith("." + key)
+                   or key.endswith(host)]
+        if not matches:
+            return m.group(0)
+        # Several citations can share a host; prefer one that carries a title,
+        # since that's what the hover preview has to show.
+        item = next((i for i in matches if i.get("title")), matches[0])
+        title = (item.get("title") or "").replace('"', "'")
+        suffix = f' "{title}"' if title else ""
+        # The model glues the marker straight onto the preceding word
+        # ("Self-Defence Forcesen.wikipedia.org"), so give the link room
+        # unless it already follows whitespace or an opening bracket.
+        start = m.start()
+        lead = "" if start == 0 or text[start - 1] in " \t\n([" else " "
+        return f"{lead}[{label}]({item['url']}{suffix})"
 
     return _CITE_MARKER.sub(repl, text)
 
@@ -183,7 +211,7 @@ async def chat(model: ModelSpec, system: str, user: str,
         content = message["content"] or ""
     except (KeyError, IndexError) as e:
         raise LLMError(f"{model.openrouter_id}: malformed response: {e}")
-    content = link_citations(content, _citation_urls(message.get("annotations")))
+    content = link_citations(content, _citation_items(message.get("annotations")))
     usage = data.get("usage") or {}
     return LLMResponse(
         content=content,
@@ -213,7 +241,7 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
 
     start = time.monotonic()
     parts: list[str] = []
-    citation_urls: list[str] = []
+    citations: list[dict] = []
     tokens_in = tokens_out = 0
     served = model.openrouter_id
 
@@ -254,9 +282,9 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
                     # message); collected here so the completed answer can be
                     # rewritten with real links below.
                     for src in (delta, choices[0].get("message") or {}):
-                        for u in _citation_urls(src.get("annotations")):
-                            if u not in citation_urls:
-                                citation_urls.append(u)
+                        for c in _citation_items(src.get("annotations")):
+                            if all(c["url"] != e["url"] for e in citations):
+                                citations.append(c)
                     thinking = delta.get("reasoning") or ""
                     if thinking:
                         # Reasoning summaries stream before content on
@@ -273,7 +301,7 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
         "response": LLMResponse(
             # Deltas streamed raw; the finished answer gets real links. The
             # client replaces the streamed text with this on `done`.
-            content=link_citations("".join(parts), citation_urls),
+            content=link_citations("".join(parts), citations),
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             latency_ms=int((time.monotonic() - start) * 1000),
