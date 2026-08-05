@@ -23,12 +23,19 @@ from .pipeline import run_query, run_query_stream  # noqa: E402
 from .schemas import MetricsSummary, QueryRequest, RunResult  # noqa: E402
 from .security import RATE_LIMITS, limiter, require_access, spend_guard  # noqa: E402
 from .store import get_store  # noqa: E402
+from . import websearch  # noqa: E402
 from .websearch import close_client as close_search_client  # noqa: E402
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Probe the image search once at boot so a bad TAVILY_API_KEY shows up in
+    # /health immediately, rather than as silently missing images. Backgrounded
+    # so a slow or hanging Tavily can't delay readiness.
+    import asyncio
+    probe = asyncio.ensure_future(websearch.verify())
     yield
+    probe.cancel()
     await close_client()
     await close_search_client()
 
@@ -57,8 +64,9 @@ async def health():
         "status": "ok",
         "openrouter_key_set": bool(settings.openrouter_api_key),
         "access_required": bool(settings.access_code),
-        "image_search": bool(settings.image_search_enabled
-                             and settings.tavily_api_key),
+        # Not just "is a key set" — the real state of the last call, so a
+        # deployment with an unusable key can't look healthy.
+        "image_search": websearch.status(),
         "store": "mongodb" if settings.mongodb_uri else "memory",
         "tier1_models": [m.openrouter_id for m in TIER1_MODELS.values()],
         "verifier": VERIFIER_MODEL.openrouter_id,

@@ -42,6 +42,40 @@ def enabled() -> bool:
     return bool(settings.image_search_enabled and settings.tavily_api_key)
 
 
+# Whether the key actually WORKS, as opposed to merely being set. /health used
+# to report image_search:true for any non-empty key, which is how a deployment
+# with an unusable key looked healthy while silently returning no images on
+# every query. Updated by each real search; seeded by verify() at startup.
+_status: dict = {"state": "unknown", "detail": "no search attempted yet"}
+
+
+def status() -> dict:
+    """Real state of the image search: disabled | ok | error | unknown."""
+    if not enabled():
+        why = ("image_search_enabled=false" if settings.tavily_api_key
+               else "TAVILY_API_KEY not set")
+        return {"state": "disabled", "detail": why}
+    return dict(_status)
+
+
+def _record(state: str, detail: str) -> None:
+    _status.update(state=state, detail=detail[:200])
+
+
+async def verify() -> None:
+    """One real search at startup, so a bad key fails loudly at deploy time.
+
+    Costs a single Tavily credit per process start. Worth it: the alternative
+    is discovering the key is wrong only when a user notices missing images,
+    which is exactly what happened in production.
+    """
+    if not enabled():
+        return
+    images = await _search_once("test query", 1)
+    if images:
+        _record("ok", "startup probe returned images")
+
+
 # An image search matches on the literal words it is given, so the phrasing a
 # user wraps their subject in ("show me photos of…", "what does … look like")
 # becomes noise: it pulls back stock art of the words themselves instead of
@@ -171,12 +205,19 @@ async def _search_once(subject: str, limit: int) -> list[SourceImage]:
             },
         )
         if resp.status_code != 200:
-            log.warning("tavily: HTTP %s: %s", resp.status_code, resp.text[:200])
+            detail = f"HTTP {resp.status_code}: {resp.text[:120]}"
+            log.warning("tavily: %s", detail)
+            # 401/403 mean the key itself is bad — the case /health must not
+            # keep calling healthy.
+            _record("error", detail)
             return []
-        return _parse(resp.json(), limit)
+        images = _parse(resp.json(), limit)
+        _record("ok", f"last search returned {len(images)} image(s)")
+        return images
     except Exception as e:  # network, timeout, malformed JSON — all non-fatal
         # Type included: timeout exceptions stringify to "" and are otherwise
         # indistinguishable from a genuine failure in the log.
-        log.warning("tavily image search failed: %s: %s",
-                    type(e).__name__, str(e)[:200])
+        detail = f"{type(e).__name__}: {str(e)[:150]}"
+        log.warning("tavily image search failed: %s", detail)
+        _record("error", detail)
         return []
