@@ -4,13 +4,19 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { streamQuery, type QueryHint } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import {
+  AlertIcon,
+  BrainIcon,
   CheckIcon,
   CodeIcon,
   CopyIcon,
+  GavelIcon,
   PencilIcon,
   RegenerateIcon,
+  ScaleIcon,
+  SearchIcon,
   SigmaIcon,
-  SparkleIcon,
+  SwordsIcon,
+  XIcon,
 } from "./icons";
 import type { ChatTurn, RunResult, SourceImage } from "@/lib/types";
 import { Badge } from "./ui";
@@ -23,7 +29,31 @@ interface ChatMessage {
   run?: RunResult;
 }
 
+// Which glyph sits in front of the live status line. Emoji are reserved
+// for model output, so the pipeline's own stages get drawn icons.
+type StatusGlyph =
+  | "auction"
+  | "drafting"
+  | "searching"
+  | "verifying"
+  | "verified"
+  | "unverified"
+  | "boss"
+  | "failed";
+
+const STATUS_ICONS: Record<StatusGlyph, (p: { className?: string }) => React.ReactNode> = {
+  auction: GavelIcon,
+  drafting: PencilIcon,
+  searching: SearchIcon,
+  verifying: ScaleIcon,
+  verified: CheckIcon,
+  unverified: AlertIcon,
+  boss: SwordsIcon,
+  failed: XIcon,
+};
+
 interface LiveState {
+  glyph: StatusGlyph;
   status: string;
   text: string;
   escalating: boolean;
@@ -337,7 +367,8 @@ export function Chat({
     const controller = new AbortController();
     abortRef.current = controller;
     setLive({
-      status: "⚡ AUCTION IN PROGRESS…",
+      glyph: "auction",
+      status: "AUCTION IN PROGRESS…",
       text: "",
       escalating: false,
       searching: false,
@@ -355,30 +386,41 @@ export function Chat({
         switch (ev.type) {
           case "stage":
             if (ev.stage === "bidding")
-              setLive((l) => l && { ...l, status: "⚡ AUCTION IN PROGRESS…" });
+              setLive((l) =>
+                l && { ...l, glyph: "auction", status: "AUCTION IN PROGRESS…" },
+              );
             else if (ev.stage === "drafting")
               setLive((l) =>
-                l && { ...l, status: `✍ ${ev.model} DRAFTING…`, provisional: true },
+                l && {
+                  ...l,
+                  glyph: "drafting",
+                  status: `${ev.model} DRAFTING…`,
+                  provisional: true,
+                },
               );
             else if (ev.stage === "searching")
               setLive((l) =>
                 l && {
                   ...l,
-                  status: "🔍 SEARCHING THE WEB…",
+                  glyph: "searching",
+                  status: "SEARCHING THE WEB…",
                   searching: true,
                   provisional: true,
                 },
               );
             else if (ev.stage === "verifying")
-              setLive((l) => l && { ...l, status: "🔍 VERIFIER JUDGING…" });
+              setLive((l) =>
+                l && { ...l, glyph: "verifying", status: "VERIFIER JUDGING…" },
+              );
             else if (ev.stage === "delivering")
               setLive((l) =>
                 l && {
                   ...l,
+                  glyph: ev.verified === false ? "unverified" : "verified",
                   status:
                     ev.verified === false
-                      ? `⚠ UNVERIFIED — ${ev.model}`
-                      : `✓ VERIFIED — ${ev.model}`,
+                      ? `UNVERIFIED — ${ev.model}`
+                      : `VERIFIED — ${ev.model}`,
                   provisional: false,
                 },
               );
@@ -387,7 +429,8 @@ export function Chat({
               pendingRef.current = "";
               reasoningRef.current = "";
               setLive((l) => l && {
-                status: `⚔ BOSS FIGHT: ${ev.model}…`,
+                glyph: "boss",
+                status: `BOSS FIGHT: ${ev.model}…`,
                 text: "",
                 escalating: true,
                 searching: false,
@@ -417,11 +460,18 @@ export function Chat({
             if (!ev.passed)
               setLive((l) => l && {
                 ...l,
-                status: `✖ VERIFICATION FAILED (${ev.score?.toFixed(2)})`,
+                glyph: "failed",
+                status: `VERIFICATION FAILED (${ev.score?.toFixed(2)})`,
               });
             break;
           case "frontier_failed":
-            setLive((l) => l && { ...l, status: "⚠ FRONTIER UNAVAILABLE — USING DRAFT" });
+            setLive((l) =>
+              l && {
+                ...l,
+                glyph: "unverified",
+                status: "FRONTIER UNAVAILABLE — USING DRAFT",
+              },
+            );
             break;
           case "error":
             throw new Error(ev.message);
@@ -519,9 +569,10 @@ export function Chat({
           ) : msg.role === "error" ? (
             <div
               key={i}
-              className="bg-red-950/50 px-3 py-2 text-sm text-red-300"
+              className="flex items-start gap-2 bg-red-950/50 px-3 py-2 text-sm text-red-300"
             >
-              ✖ {msg.text}
+              <XIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{msg.text}</span>
             </div>
           ) : (
             <div key={i} className="flex justify-start">
@@ -583,7 +634,10 @@ export function Chat({
               }`}
             >
               <div className="mb-1.5 flex items-center gap-2 font-[family-name:var(--font-pixel)] text-[10px] text-orange-400">
-                <span className="blink">▓</span>
+                {(() => {
+                  const Glyph = STATUS_ICONS[live.glyph];
+                  return <Glyph className="h-3.5 w-3.5 shrink-0" />;
+                })()}
                 {live.status}
                 {live.provisional && live.text && (
                   <span className="border border-amber-700 bg-amber-950/40 px-1 text-[10px] uppercase text-amber-500">
@@ -620,10 +674,10 @@ export function Chat({
       <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-8">
         {(
           [
-            ["general", "general", SparkleIcon],
+            ["general", "general", BrainIcon],
             ["coding", "coding", CodeIcon],
             ["reasoning", "logic/math", SigmaIcon],
-          ] as [QueryHint, string, typeof SparkleIcon][]
+          ] as [QueryHint, string, typeof BrainIcon][]
         ).map(([value, label, Icon]) => (
           <button
             key={value}
@@ -635,7 +689,7 @@ export function Chat({
             }`}
             title="picks which model pre-drafts your answer during the auction"
           >
-            <Icon className="h-3 w-3" />
+            <Icon className="h-3.5 w-3.5" />
             {label}
           </button>
         ))}

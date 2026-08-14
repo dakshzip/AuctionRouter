@@ -66,10 +66,12 @@ export default function Home() {
               aria-label={t}
               aria-current={tab === t ? "page" : undefined}
               title={t === "chat" ? "Chat" : "Metrics"}
-              className={`rounded p-2 sm:p-2.5 ${
+              // No chip until you reach for it: the box is a hover affordance,
+              // so the active tab is carried by colour alone
+              className={`rounded p-2 hover:bg-stone-900 sm:p-2.5 ${
                 tab === t
-                  ? "glow-text bg-orange-950 text-orange-400"
-                  : "bg-stone-900 text-stone-500 hover:text-stone-300"
+                  ? "glow-text text-orange-400"
+                  : "text-stone-500 hover:text-stone-300"
               }`}
             >
               <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
