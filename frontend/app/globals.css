@@ -137,6 +137,21 @@ body {
   animation: gavelSlam 3.2s steps(3, end) infinite;
 }
 
+/* Live-status dot: a smooth breathe rather than the hard on/off of the
+   terminal cursor, since it runs for the whole length of a query. */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.72); }
+}
+.live-dot {
+  animation: livePulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
+
 /* Blinking cursor */
 @keyframes blink {
   0%, 49% { opacity: 1; }

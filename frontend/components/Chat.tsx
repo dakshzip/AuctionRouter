@@ -634,7 +634,10 @@ export function Chat({
               }`}
             >
               <div className="mb-1.5 flex items-center gap-2 font-[family-name:var(--font-pixel)] text-[10px] text-orange-400">
-                <span className="blink">▓</span>
+                <span
+                  className="live-dot inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-current"
+                  aria-hidden="true"
+                />
                 {(() => {
                   const Glyph = STATUS_ICONS[live.glyph];
                   return <Glyph className="h-3.5 w-3.5 shrink-0" />;
