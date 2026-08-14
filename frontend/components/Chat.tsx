@@ -586,9 +586,15 @@ export function Chat({
               >
                 {msg.run && (
                   <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                    <Badge tone={msg.run.tier === 1 ? "green" : "amber"}>
+                    {/* Who answered is a byline, not a chip: colour alone
+                        carries the tier, without a box around it */}
+                    <span
+                      className={`font-[family-name:var(--font-pixel)] text-[8px] uppercase leading-4 ${
+                        msg.run.tier === 1 ? "text-green-400" : "text-orange-400"
+                      }`}
+                    >
                       {msg.run.answered_by}
-                    </Badge>
+                    </span>
                     {msg.run.escalated && <Badge tone="amber">boss fight</Badge>}
                     <span className="text-xs text-stone-600">
                       ${msg.run.total_cost_usd.toFixed(5)} ·{" "}
