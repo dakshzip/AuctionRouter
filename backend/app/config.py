@@ -1,4 +1,4 @@
-"""Central configuration for AuctionRouter.
+"""Central configuration for GAVL.
 
 All model choices, auction weights, and thresholds from the PRD live here so
 they can be tuned without touching pipeline code.
@@ -225,7 +225,7 @@ class Settings(BaseSettings):
     max_answer_tokens: int = 3500
     # Bids without a speculative answer stay ~100 tokens; the cap only
     # bites on answer-carrying bids (which are the winning drafts)
-    max_bid_tokens: int = 3500
+    max_bid_tokens: int = 5000
 
     # Conversation history caps per pipeline stage (turns are single
     # messages, so 4 turns = 2 user/assistant exchanges)

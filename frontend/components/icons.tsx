@@ -55,6 +55,27 @@ export function RegenerateIcon({ className = "h-4 w-4" }: { className?: string }
   );
 }
 
+/** Rounded speech bubble — the chat tab. */
+export function ChatIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-2.9-.4L3 21l1.6-4.7A8.1 8.1 0 0 1 3.6 11.5a8.4 8.4 0 0 1 9-8.4 8.4 8.4 0 0 1 8.4 8.4Z" />
+    </Svg>
+  );
+}
+
+/** Ascending bar chart — the analytics glyph every SaaS dashboard uses. */
+export function MetricsIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <line x1="3" y1="21" x2="21" y2="21" />
+      <line x1="7" y1="21" x2="7" y2="14" />
+      <line x1="12" y1="21" x2="12" y2="10" />
+      <line x1="17" y1="21" x2="17" y2="5" />
+    </Svg>
+  );
+}
+
 /** Pencil — edit an existing prompt. */
 export function PencilIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (

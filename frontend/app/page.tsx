@@ -5,6 +5,7 @@ import { AccessGate } from "@/components/AccessGate";
 import { AuctionPanel } from "@/components/AuctionPanel";
 import { BidArcade } from "@/components/BidArcade";
 import { Chat } from "@/components/Chat";
+import { ChatIcon, MetricsIcon } from "@/components/icons";
 import { MetricsDashboard } from "@/components/MetricsDashboard";
 import { RoutingGraph } from "@/components/RoutingGraph";
 import { VerificationPanel } from "@/components/VerificationPanel";
@@ -55,17 +56,23 @@ export default function Home() {
           <span className="blink text-orange-500">_</span>
         </h1>
         <nav className="flex gap-2">
-          {(["chat", "metrics"] as Tab[]).map((t) => (
+          {([
+            ["chat", ChatIcon] as const,
+            ["metrics", MetricsIcon] as const,
+          ]).map(([t, Icon]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`rounded px-2.5 py-1.5 font-[family-name:var(--font-pixel)] text-[10px] uppercase sm:px-4 sm:py-2 sm:text-[12px] ${
+              aria-label={t}
+              aria-current={tab === t ? "page" : undefined}
+              title={t === "chat" ? "Chat" : "Metrics"}
+              className={`rounded p-2 sm:p-2.5 ${
                 tab === t
                   ? "glow-text bg-orange-950 text-orange-400"
                   : "bg-stone-900 text-stone-500 hover:text-stone-300"
               }`}
             >
-              {tab === t ? `▶ ${t}` : t}
+              <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           ))}
         </nav>
