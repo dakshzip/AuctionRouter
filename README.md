@@ -51,17 +51,23 @@ cost and ~15× faster median latency** than sending everything to the frontier.
 
 ```mermaid
 flowchart LR
-    Q([Your query]) --> B{Parallel bids}
-    B --> G[Generalist]
-    B --> C[Coder]
-    B --> M[Logic / Math]
-    G & C & M --> A[Auction<br/>score bids]
+    Q([Your query]) --> B{{Bid in parallel}}
+    B --> G[Generalist] & C[Coder] & M[Logic / math]
+    G & C & M --> A[Auction<br/>score the bids]
     A -->|winner drafts| V{Verifier}
-    V -->|passes| ✅([Answer])
-    V -->|hard + fails| BOSS[🔨 Frontier<br/>boss fight]
-    BOSS --> ✅
-    A -.needs fresh info.-> W[🔍 Web search]
+    A -.->|needs fresh info| W[Web search]
     W --> V
+
+    V -->|passes| ANS([Answer])
+    V -->|hard query fails| BOSS[Frontier model<br/>the boss fight]
+    BOSS --> ANS
+
+    classDef cheap fill:#0d2018,stroke:#16a34a,color:#bbf7d0
+    classDef boss fill:#2a0d12,stroke:#f43f5e,color:#ffe4e6
+    classDef out fill:#1c1005,stroke:#f97316,color:#fed7aa
+    class G,C,M cheap
+    class BOSS boss
+    class ANS out
 ```
 
 1. **Bidding** — all three tier-1 models bid in parallel. Each returns a
