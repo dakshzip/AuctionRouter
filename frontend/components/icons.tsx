@@ -76,6 +76,34 @@ export function MetricsIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
+/** Four-point sparkle — the general/all-purpose topic. */
+export function SparkleIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M12 3c.6 3.9 2.1 5.4 6 6-3.9.6-5.4 2.1-6 6-.6-3.9-2.1-5.4-6-6 3.9-.6 5.4-2.1 6-6Z" />
+    </Svg>
+  );
+}
+
+/** Angle brackets — the coding topic. */
+export function CodeIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <polyline points="8 6 3 12 8 18" />
+      <polyline points="16 6 21 12 16 18" />
+    </Svg>
+  );
+}
+
+/** Sigma — the logic/math topic. */
+export function SigmaIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M18 5H6l6 7-6 7h12" />
+    </Svg>
+  );
+}
+
 /** Pencil — edit an existing prompt. */
 export function PencilIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (

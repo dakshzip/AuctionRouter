@@ -3,7 +3,15 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { streamQuery, type QueryHint } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
-import { CheckIcon, CopyIcon, PencilIcon, RegenerateIcon } from "./icons";
+import {
+  CheckIcon,
+  CodeIcon,
+  CopyIcon,
+  PencilIcon,
+  RegenerateIcon,
+  SigmaIcon,
+  SparkleIcon,
+} from "./icons";
 import type { ChatTurn, RunResult, SourceImage } from "@/lib/types";
 import { Badge } from "./ui";
 import { ImageStrip } from "./ImageStrip";
@@ -609,24 +617,25 @@ export function Chat({
       </div>
 
       <div className="mx-auto w-full max-w-[70rem]">
-      <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-6">
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-8">
         {(
           [
-            ["general", "general"],
-            ["coding", "coding"],
-            ["reasoning", "logic/math"],
-          ] as [QueryHint, string][]
-        ).map(([value, label]) => (
+            ["general", "general", SparkleIcon],
+            ["coding", "coding", CodeIcon],
+            ["reasoning", "logic/math", SigmaIcon],
+          ] as [QueryHint, string, typeof SparkleIcon][]
+        ).map(([value, label, Icon]) => (
           <button
             key={value}
             onClick={() => setHint(value)}
-            className={`rounded px-2 py-0.5 font-[family-name:var(--font-pixel)] text-[10px] uppercase ${
+            className={`flex items-center justify-center gap-1.5 rounded px-2 py-1 font-[family-name:var(--font-pixel)] text-[10px] leading-none uppercase ${
               hint === value
                 ? "bg-orange-950 text-orange-400"
                 : "bg-stone-900 text-stone-500 hover:text-stone-300"
             }`}
             title="picks which model pre-drafts your answer during the auction"
           >
+            <Icon className="h-3 w-3" />
             {label}
           </button>
         ))}
