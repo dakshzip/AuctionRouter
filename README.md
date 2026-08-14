@@ -59,7 +59,7 @@ flowchart LR
     W --> V
 
     V -->|passes| ANS([Answer])
-    V -->|hard query fails| BOSS[Frontier model<br/>the boss fight]
+    V -->|hard query fails| BOSS[🔨 Frontier model<br/>the boss fight]
     BOSS --> ANS
 
     classDef cheap fill:#0d2018,stroke:#16a34a,color:#bbf7d0
