@@ -20,13 +20,17 @@ from langgraph.graph import END, StateGraph
 
 from . import prompts
 from .config import (BASELINE_MODEL, SPECULATIVE_HINT_MODELS, TIER1_MODELS,
-                     TIER2_MODEL, VERIFIER_MODEL, settings)
+                     TIER2_MODEL, VERIFIER_MODEL, frontier_display_name,
+                     settings)
 from .llm import LLMError, chat, extract_json
 from .schemas import Bid, RunResult, SourceImage, Usage, Verification
 from .store import get_store
 from . import webgate
 from .websearch import enabled as image_search_enabled
+from .security import spend_guard
 from .websearch import search_images
+
+log = logging.getLogger(__name__)
 
 
 class RouterState(TypedDict, total=False):
@@ -51,7 +55,7 @@ class RouterState(TypedDict, total=False):
     started_at: float
 
 
-def _clamp(x: float) -> float:
+def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
 
 
@@ -84,7 +88,7 @@ async def _get_bid(model_key: str, query: str,
             model_key, settings.default_historical_accuracy)
         json_part, speculative = _split_bid_content(resp.content)
         data = extract_json(json_part)
-        confidence = _clamp(data.get("confidence", 0))
+        confidence = _clamp01(data.get("confidence", 0))
         # Ignore answers from bidders below the speculation bar — an answer
         # attached to a low bid means the model didn't follow the protocol
         if confidence < settings.speculative_draft_confidence:
@@ -93,7 +97,7 @@ async def _get_bid(model_key: str, query: str,
             model_key=model_key,
             model_name=spec.display_name,
             confidence=confidence,
-            estimated_difficulty=_clamp(data.get("estimated_difficulty", 0.5)),
+            estimated_difficulty=_clamp01(data.get("estimated_difficulty", 0.5)),
             reason=str(data.get("reason", ""))[:300],
             historical_accuracy=hist,
             draft_answer=speculative,
@@ -107,7 +111,7 @@ async def _get_bid(model_key: str, query: str,
             latency_ms=resp.latency_ms,
         )
         return bid, usage
-    except (LLMError, ValueError, asyncio.TimeoutError, Exception) as e:
+    except (LLMError, ValueError, asyncio.TimeoutError) as e:
         try:
             hist = (await accuracy_task).get(
                 model_key, settings.default_historical_accuracy)
@@ -190,7 +194,7 @@ async def bid_collection(state: RouterState) -> RouterState:
     return {"bids": bids, "usages": state.get("usages", []) + usages}
 
 
-def _is_hard(state: RouterState) -> bool:
+def _is_hard_enough_to_escalate(state: RouterState) -> bool:
     """Hard gate for GPT-5: only queries the bidders rated genuinely hard
     (STEM proofs, heavy reasoning, big coding tasks) may escalate. With no
     signal at all (every bidder errored) the gate stays open — that's an
@@ -280,6 +284,7 @@ _CURRENT_STATE = re.compile(r"""(?ix)
 """)
 
 
+# imported by: tests/test_web_heuristic.py, evals/bench_web_gate.py
 def _needs_web_heuristic(query: str) -> bool:
     """Cheap (~µs, no API) t=0 check for whether a query needs fresh data.
 
@@ -339,6 +344,7 @@ _VISUAL_INTENT = re.compile(r"""(?ix)
 """)
 
 
+# imported by: tests/test_image_gate.py
 def _wants_images_heuristic(query: str) -> bool:
     """Cheap (~µs, no API) check for whether photos would suit this query.
 
@@ -372,6 +378,7 @@ _NO_FRESH_INFO = re.compile(r"""(?ix)
 """)
 
 
+# imported by: tests/test_web_heuristic.py
 def _admits_no_fresh_info(text: str) -> bool:
     return bool(_NO_FRESH_INFO.search(text or ""))
 
@@ -416,6 +423,7 @@ def _wants_teaching(query: str) -> bool:
     return bool(_TEACHING.search(query))
 
 
+# imported by: tests/test_image_gate.py
 async def auction(state: RouterState) -> RouterState:
     bids = state["bids"]
     valid = [b for b in bids if b.error is None]
@@ -427,7 +435,7 @@ async def auction(state: RouterState) -> RouterState:
     # Weak bids / disagreement only escalate when the query is genuinely
     # hard; an easy query with hesitant bidders still drafts — the
     # verifier remains its quality gate.
-    if max_conf < settings.min_auction_confidence and _is_hard(state):
+    if max_conf < settings.min_auction_confidence and _is_hard_enough_to_escalate(state):
         return {"escalated": True,
                 "escalation_reason": f"Low auction confidence (max {max_conf:.2f} < {settings.min_auction_confidence})"}
 
@@ -436,7 +444,7 @@ async def auction(state: RouterState) -> RouterState:
     # system working, not a red flag — so skip the check when a model is
     # highly confident.
     if len(confidences) >= 2 and max_conf < settings.disagreement_exempt_confidence \
-            and _is_hard(state):
+            and _is_hard_enough_to_escalate(state):
         spread = statistics.pstdev(confidences)
         if spread > settings.disagreement_stddev:
             return {"escalated": True,
@@ -505,8 +513,8 @@ async def draft(state: RouterState) -> RouterState:
         cost_usd=spec.estimate_cost(resp.tokens_in, resp.tokens_out),
         latency_ms=resp.latency_ms,
     )]
-    # Second-chance web search: if we didn't already search and the draft
-    # admits it lacks fresh info, retry once with a live web search.
+    # Second chance: the regex and the bidders both missed, but the model's
+    # own draft gives the game away.
     if not needs_web and _admits_no_fresh_info(resp.content):
         try:
             web_resp = await chat(spec, prompts.ANSWER_SYSTEM, state["query"],
@@ -543,10 +551,10 @@ async def verify(state: RouterState) -> RouterState:
                                               web_used=state.get("needs_web", False)),
                           reasoning_effort=settings.verifier_reasoning_effort)
         data = extract_json(resp.content)
-        score = _clamp(data.get("score", 0))
+        score = _clamp01(data.get("score", 0))
         # Enforce score = min(subscores) server-side; models sometimes
         # report an optimistic overall despite a low dimension
-        subscores = [_clamp(data[k]) for k in
+        subscores = [_clamp01(data[k]) for k in
                      ("correctness", "completeness", "commitment", "presentation")
                      if k in data]
         if subscores:
@@ -587,7 +595,7 @@ async def verify(state: RouterState) -> RouterState:
 
     out: RouterState = {"verification": verification, "usages": usages}
     if verification.score < settings.verification_threshold or not verification.passed:
-        if _is_hard(state):
+        if _is_hard_enough_to_escalate(state):
             out["escalated"] = True
             out["escalation_reason"] = (
                 f"Verification failed (score {verification.score:.2f} < {settings.verification_threshold})"
@@ -597,7 +605,7 @@ async def verify(state: RouterState) -> RouterState:
     return out
 
 
-def _frontier_plan(state: RouterState) -> tuple[str, int]:
+def _frontier_budget(state: RouterState) -> tuple[str, int]:
     """Pick GPT-5's (reasoning effort, max_tokens) from the bidders'
     difficulty estimates.
 
@@ -618,7 +626,7 @@ def _frontier_plan(state: RouterState) -> tuple[str, int]:
 
 
 async def escalate(state: RouterState) -> RouterState:
-    effort, max_tokens = _frontier_plan(state)
+    effort, max_tokens = _frontier_budget(state)
     try:
         resp = await chat(TIER2_MODEL, prompts.FRONTIER_SYSTEM, state["query"],
                           max_tokens=max_tokens,
@@ -641,15 +649,17 @@ async def escalate(state: RouterState) -> RouterState:
                 + f" | frontier failed: {str(e)[:150]}",
             }
         raise
+    answered_by = frontier_display_name(resp.served_model)
     usage = Usage(
-        model_key=TIER2_MODEL.key, model_name=TIER2_MODEL.display_name,
+        model_key=TIER2_MODEL.key, model_name=answered_by,
         stage="escalate", tokens_in=resp.tokens_in, tokens_out=resp.tokens_out,
-        cost_usd=TIER2_MODEL.estimate_cost(resp.tokens_in, resp.tokens_out),
+        cost_usd=TIER2_MODEL.estimate_cost(resp.tokens_in, resp.tokens_out,
+                                           resp.served_model),
         latency_ms=resp.latency_ms,
     )
     return {
         "final_answer": resp.content,
-        "answered_by": TIER2_MODEL.display_name,
+        "answered_by": answered_by,
         "tier": 2,
         "usages": state["usages"] + [usage],
     }
@@ -666,7 +676,7 @@ async def finalize(state: RouterState) -> RouterState:
     }
 
 
-def _skip_verify(state: RouterState) -> bool:
+def _should_skip_verification(state: RouterState) -> bool:
     """Creative writing has no correct answer to check — skip the verifier
     entirely when the creative-specialist model won the auction."""
     creative_key = SPECULATIVE_HINT_MODELS.get("creative")
@@ -679,14 +689,14 @@ def _after_auction(state: RouterState) -> str:
     if state.get("draft_answer"):
         # Winner's bid carried a speculative answer: verify it, or finalize
         # straight away for creative winners
-        return "finalize" if _skip_verify(state) else "verify"
+        return "finalize" if _should_skip_verification(state) else "verify"
     return "draft"
 
 
 def _after_draft(state: RouterState) -> str:
     if state.get("escalated"):
         return "escalate"
-    return "finalize" if _skip_verify(state) else "verify"
+    return "finalize" if _should_skip_verification(state) else "verify"
 
 
 def _after_verify(state: RouterState) -> str:
@@ -767,19 +777,13 @@ _save_tasks: set[asyncio.Task] = set()
 
 
 def _save_run_bg(run: RunResult) -> None:
-    # Count this run's cost toward the daily spend ceiling (both query and
-    # stream paths persist here, so the guard sees every run)
-    from .security import spend_guard
-    spend_guard.add(run.total_cost_usd)
-
     task = asyncio.ensure_future(get_store().save_run(run))
     _save_tasks.add(task)
 
     def _done(t: asyncio.Task) -> None:
         _save_tasks.discard(t)
         if not t.cancelled() and t.exception() is not None:
-            logging.getLogger(__name__).warning(
-                "save_run failed for %s: %s", run.id, t.exception())
+            log.warning("save_run failed for %s: %s", run.id, t.exception())
 
     task.add_done_callback(_done)
 
@@ -799,6 +803,7 @@ def _trim_history(history: list[dict] | None) -> list[dict]:
             for t in turns]
 
 
+# imported by: main.py, evals/run_evals.py
 async def run_query(query: str, history: list[dict] | None = None,
                     hint: str = "general") -> RunResult:
     start = time.monotonic()
@@ -812,10 +817,12 @@ async def run_query(query: str, history: list[dict] | None = None,
         final["images"] = await search_images(
             query, answer=final.get("final_answer") or "")
     run = _make_run(query, final, start)
+    spend_guard.record_spend(run.total_cost_usd)
     _save_run_bg(run)
     return run
 
 
+# imported by: main.py
 async def run_query_stream(query: str, history: list[dict] | None = None,
                            hint: str = "general"):
     """Streaming twin of the LangGraph pipeline.
@@ -852,7 +859,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
     # double time-to-first-token on every query that needs no search at all.
     # Skipped when the regex already decided — that answer costs nothing and
     # is never wrong in the "web needed" direction.
-    gate_task = (asyncio.ensure_future(webgate.decide(query))
+    gate_task = (asyncio.ensure_future(webgate.needs_web(query))
                  if not regex_web and webgate.enabled() else None)
 
     def _start_hedge(web: bool) -> tuple[asyncio.Task, asyncio.Queue]:
@@ -878,6 +885,10 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                         resp = ev["response"]
                 q.put_nowait(("final", resp))
             except Exception:
+                # Stays broad: the hedge is speculative and must never sink the
+                # request. Logged with a traceback so a bug in it can't hide as
+                # a silently-discarded hedge.
+                log.exception("hedge failed")
                 q.put_nowait(("final", None))
 
         return asyncio.create_task(_run()), q
@@ -940,7 +951,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             if verdict is True:
                 gate_says_web = True
                 state["needs_web"] = True
-        except Exception:
+        except asyncio.TimeoutError:
             pass  # no opinion; the regex and bidder flags still decide
     state["gate_web"] = gate_says_web
     state.update(bid_task.result())
@@ -991,7 +1002,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                                                   resp.served_model),
                 latency_ms=resp.latency_ms,
             )]
-            if not _skip_verify(state):
+            if not _should_skip_verification(state):
                 yield {"type": "stage", "stage": "verifying"}
                 state.update(await verify(state))
         else:
@@ -1011,7 +1022,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             # parallel while the client renders the draft (creative skips it)
             yield {"type": "stage", "stage": "drafting",
                    "model": spec.display_name, "speculative": True}
-            if _skip_verify(state):
+            if _should_skip_verification(state):
                 yield {"type": "token", "text": state["draft_answer"]}
             else:
                 verify_task = asyncio.create_task(verify(state))
@@ -1056,14 +1067,13 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
             except LLMError as e:
                 state["escalated"] = True
                 state["escalation_reason"] = f"Winner failed to answer: {str(e)[:150]}"
-            if state.get("draft_answer") and not _skip_verify(state):
+            if state.get("draft_answer") and not _should_skip_verification(state):
                 yield {"type": "stage", "stage": "verifying"}
                 state.update(await verify(state))
 
-    # Second-chance web search: the regex missed and no bidder flagged it, but
-    # the model's own draft admits it lacks current info ("as of my training",
-    # "hasn't happened yet", "I'm not sure"). Tell the user we're checking the
-    # web, discard the stale draft, and re-answer with a live search — streamed.
+    # Second chance: the regex missed and no bidder flagged it, but the model's
+    # own draft gives the game away. Worth a whole extra round-trip because the
+    # alternative is shipping "as of my training…" as the final answer.
     if (not state.get("escalated") and not state.get("needs_web")
             and state.get("draft_answer")
             and _admits_no_fresh_info(state["draft_answer"])):
@@ -1096,7 +1106,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                                                 resp.served_model),
                     latency_ms=resp.latency_ms,
                 )]
-                if not _skip_verify(state):
+                if not _should_skip_verification(state):
                     yield {"type": "stage", "stage": "verifying"}
                     state.update(await verify(state))
         except LLMError:
@@ -1121,7 +1131,7 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                "verified": bool(v and v.passed)}
 
     if state.get("escalated"):
-        effort, max_tokens = _frontier_plan(state)
+        effort, max_tokens = _frontier_budget(state)
         yield {"type": "stage", "stage": "escalating",
                "model": TIER2_MODEL.display_name,
                "reason": state.get("escalation_reason"),
@@ -1141,11 +1151,12 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                     resp = ev["response"]
             if resp is None or not resp.content.strip():
                 raise LLMError(f"{TIER2_MODEL.openrouter_id}: empty response")
+            answered_by = frontier_display_name(resp.served_model)
             state["final_answer"] = resp.content
-            state["answered_by"] = TIER2_MODEL.display_name
+            state["answered_by"] = answered_by
             state["tier"] = 2
             state["usages"] = state["usages"] + [Usage(
-                model_key=TIER2_MODEL.key, model_name=TIER2_MODEL.display_name,
+                model_key=TIER2_MODEL.key, model_name=answered_by,
                 stage="escalate", tokens_in=resp.tokens_in, tokens_out=resp.tokens_out,
                 cost_usd=TIER2_MODEL.estimate_cost(resp.tokens_in, resp.tokens_out,
                                                    resp.served_model),
@@ -1175,5 +1186,6 @@ async def run_query_stream(query: str, history: list[dict] | None = None,
                "images": [im.model_dump(mode="json") for im in images]}
 
     run = _make_run(query, state, start)
+    spend_guard.record_spend(run.total_cost_usd)
     _save_run_bg(run)
     yield {"type": "done", "run": run.model_dump(mode="json")}

@@ -24,12 +24,15 @@ def _client_ip(request: Request) -> str:
     return get_remote_address(request)
 
 
+# imported by: main.py
 limiter = Limiter(key_func=_client_ip)
 
 # Rate strings shared by the query endpoints' decorators
+# imported by: main.py
 RATE_LIMITS = f"{settings.rate_limit_per_min}/minute;{settings.rate_limit_per_day}/day"
 
 
+# imported by: main.py
 async def require_access(x_access_code: str = Header(default="")) -> None:
     """Dependency: gate every /api/* route behind the shared access code.
 
@@ -52,28 +55,28 @@ class SpendGuard:
         self._day = ""
         self._spent = 0.0
 
-    def _roll(self) -> None:
+    def _reset_if_new_day(self) -> None:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if today != self._day:
             self._day, self._spent = today, 0.0
 
-    def check(self) -> None:
-        """Raise 503 if today's spend is already over the limit."""
-        self._roll()
+    def raise_if_over_budget(self) -> None:
+        self._reset_if_new_day()
         if self._spent >= settings.daily_spend_limit_usd:
             raise HTTPException(
                 status_code=503,
                 detail="Daily budget reached — try again tomorrow.",
             )
 
-    def add(self, cost_usd: float) -> None:
-        self._roll()
+    def record_spend(self, cost_usd: float) -> None:
+        self._reset_if_new_day()
         self._spent += max(cost_usd, 0.0)
 
     @property
     def spent_today(self) -> float:
-        self._roll()
+        self._reset_if_new_day()
         return self._spent
 
 
+# imported by: main.py, pipeline.py
 spend_guard = SpendGuard()

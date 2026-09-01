@@ -11,6 +11,7 @@ class ChatTurn(BaseModel):
     content: str = Field(max_length=8000)
 
 
+# imported by: main.py
 class QueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=8000)
     history: list[ChatTurn] = Field(default=[], max_length=20)
@@ -19,6 +20,7 @@ class QueryRequest(BaseModel):
     hint: Literal["general", "coding", "reasoning"] = "general"
 
 
+# imported by: pipeline.py, tests/test_image_gate.py
 class Bid(BaseModel):
     model_key: str
     model_name: str
@@ -34,6 +36,7 @@ class Bid(BaseModel):
     wants_images: bool = False        # photos would genuinely help the answer
 
 
+# imported by: pipeline.py, websearch.py
 class SourceImage(BaseModel):
     """One picture harvested from the image search (see websearch.py)."""
     url: str
@@ -41,12 +44,14 @@ class SourceImage(BaseModel):
     source_url: Optional[str] = None  # page the image came from, when known
 
 
+# imported by: pipeline.py
 class Verification(BaseModel):
     score: float
     passed: bool
     feedback: str = ""
 
 
+# imported by: pipeline.py, webgate.py
 class Usage(BaseModel):
     model_key: str
     model_name: str
@@ -57,6 +62,7 @@ class Usage(BaseModel):
     latency_ms: int = 0
 
 
+# imported by: main.py, pipeline.py, store.py
 class RunResult(BaseModel):
     id: str
     query: str
@@ -77,6 +83,7 @@ class RunResult(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+# imported by: main.py, store.py
 class MetricsSummary(BaseModel):
     total_queries: int = 0
     avg_cost_usd: float = 0.0

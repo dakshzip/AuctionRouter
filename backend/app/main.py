@@ -29,20 +29,18 @@ from .websearch import close_client as close_search_client  # noqa: E402
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Probe the image search once at boot so a bad TAVILY_API_KEY shows up in
-    # /health immediately, rather than as silently missing images. Backgrounded
-    # so a slow or hanging Tavily can't delay readiness.
+    # Backgrounded, not awaited: a bad TAVILY_API_KEY must surface in /health,
+    # but a slow or hanging Tavily must not delay readiness.
     import asyncio
-    probe = asyncio.ensure_future(websearch.verify())
+    key_probe = asyncio.ensure_future(websearch.probe_api_key())
     yield
-    probe.cancel()
+    key_probe.cancel()
     await close_client()
     await close_search_client()
 
 
 app = FastAPI(title="AuctionRouter", version="0.1.0", lifespan=lifespan)
 
-# Per-IP rate limiting (slowapi)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -80,7 +78,7 @@ async def health():
 async def query(request: Request, req: QueryRequest):
     if not settings.openrouter_api_key:
         raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY is not set")
-    spend_guard.check()
+    spend_guard.raise_if_over_budget()
     return await run_query(req.query, [t.model_dump() for t in req.history],
                            req.hint)
 
@@ -90,18 +88,18 @@ async def query(request: Request, req: QueryRequest):
 async def query_stream(request: Request, req: QueryRequest):
     if not settings.openrouter_api_key:
         raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY is not set")
-    spend_guard.check()
+    spend_guard.raise_if_over_budget()
 
     history = [t.model_dump() for t in req.history]
 
-    async def gen():
+    async def stream_ndjson():
         try:
             async for event in run_query_stream(req.query, history, req.hint):
                 yield json.dumps(event) + "\n"
-        except Exception as e:  # surface pipeline crashes to the client
+        except Exception as e:  # a crash mid-stream would otherwise just hang
             yield json.dumps({"type": "error", "message": str(e)[:300]}) + "\n"
 
-    return StreamingResponse(gen(), media_type="application/x-ndjson")
+    return StreamingResponse(stream_ndjson(), media_type="application/x-ndjson")
 
 
 @app.get("/api/runs", response_model=list[RunResult],

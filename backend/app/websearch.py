@@ -31,6 +31,7 @@ def get_client() -> httpx.AsyncClient:
     return _client
 
 
+# imported by: main.py, as close_search_client
 async def close_client() -> None:
     global _client
     if _client is not None:
@@ -38,6 +39,7 @@ async def close_client() -> None:
         _client = None
 
 
+# imported by: pipeline.py as image_search_enabled, main.py
 def enabled() -> bool:
     return bool(settings.image_search_enabled and settings.tavily_api_key)
 
@@ -45,10 +47,11 @@ def enabled() -> bool:
 # Whether the key actually WORKS, as opposed to merely being set. /health used
 # to report image_search:true for any non-empty key, which is how a deployment
 # with an unusable key looked healthy while silently returning no images on
-# every query. Updated by each real search; seeded by verify() at startup.
+# every query. Updated by each real search; seeded by probe_api_key() at startup.
 _status: dict = {"state": "unknown", "detail": "no search attempted yet"}
 
 
+# imported by: main.py
 def status() -> dict:
     """Real state of the image search: disabled | ok | error | unknown."""
     if not enabled():
@@ -58,11 +61,15 @@ def status() -> dict:
     return dict(_status)
 
 
-def _record(state: str, detail: str) -> None:
+Status = tuple[str, str]  # (state, detail)
+
+
+def _record_status(state: str, detail: str) -> None:
     _status.update(state=state, detail=detail[:200])
 
 
-async def verify() -> None:
+# imported by: main.py
+async def probe_api_key() -> None:
     """One real search at startup, so a bad key fails loudly at deploy time.
 
     Costs a single Tavily credit per process start. Worth it: the alternative
@@ -71,9 +78,8 @@ async def verify() -> None:
     """
     if not enabled():
         return
-    images = await _search_once("test query", 1)
-    if images:
-        _record("ok", "startup probe returned images")
+    _, status = await _search_once("test query", 1)
+    _record_status(*status)
 
 
 # An image search matches on the literal words it is given, so the phrasing a
@@ -93,6 +99,7 @@ _LEAD = re.compile(r"""(?ix)^\s*
 _TAIL = re.compile(r"(?i)\s*\blooks?\s+like\b\s*[?.!]*\s*$")
 
 
+# imported by: tests/test_websearch.py
 def search_subject(query: str) -> str:
     """Reduce a conversational query to the thing to search images for."""
     subject = _TAIL.sub("", _LEAD.sub("", query)).strip(" ?.!,")
@@ -137,7 +144,8 @@ def image_query(query: str, answer: str | None = None) -> str:
     return first
 
 
-def _parse(data: dict, limit: int) -> list[SourceImage]:
+# imported by: tests/test_websearch.py
+def _parse_images(data: dict, limit: int) -> list[SourceImage]:
     """Map Tavily's `images` array to SourceImages, dropping junk.
 
     With include_image_descriptions the entries are dicts; without it they
@@ -164,6 +172,7 @@ def _parse(data: dict, limit: int) -> list[SourceImage]:
     return out
 
 
+# imported by: pipeline.py, tests/test_websearch.py
 async def search_images(query: str, limit: int | None = None,
                         answer: str | None = None) -> list[SourceImage]:
     """Fetch up to `limit` images. Never raises.
@@ -183,13 +192,21 @@ async def search_images(query: str, limit: int | None = None,
     if fallback and fallback != attempts[0]:
         attempts.append(fallback)
     for attempt in attempts:
-        images = await _search_once(attempt, limit)
+        images, status = await _search_once(attempt, limit)
+        _record_status(*status)
         if images:
             return images
     return []
 
 
-async def _search_once(subject: str, limit: int) -> list[SourceImage]:
+async def _search_once(subject: str,
+                       limit: int) -> tuple[list[SourceImage], Status]:
+    """Search once and report how it went. Never raises, never records.
+
+    The status is returned rather than written, so the one place that owns
+    _status is _record_status's callers — a search can't quietly change what
+    /health reports as a side effect of being called.
+    """
     try:
         resp = await get_client().post(
             TAVILY_URL,
@@ -209,15 +226,12 @@ async def _search_once(subject: str, limit: int) -> list[SourceImage]:
             log.warning("tavily: %s", detail)
             # 401/403 mean the key itself is bad — the case /health must not
             # keep calling healthy.
-            _record("error", detail)
-            return []
-        images = _parse(resp.json(), limit)
-        _record("ok", f"last search returned {len(images)} image(s)")
-        return images
+            return [], ("error", detail)
+        images = _parse_images(resp.json(), limit)
+        return images, ("ok", f"last search returned {len(images)} image(s)")
     except Exception as e:  # network, timeout, malformed JSON — all non-fatal
         # Type included: timeout exceptions stringify to "" and are otherwise
         # indistinguishable from a genuine failure in the log.
         detail = f"{type(e).__name__}: {str(e)[:150]}"
         log.warning("tavily image search failed: %s", detail)
-        _record("error", detail)
-        return []
+        return [], ("error", detail)

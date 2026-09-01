@@ -7,6 +7,7 @@ they can be tuned without touching pipeline code.
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# imported by: llm.py
 class ModelSpec:
     """Static description of a model available through OpenRouter."""
 
@@ -24,19 +25,28 @@ class ModelSpec:
         # cost term and the savings metric.
         self.cost_per_mtok_in = cost_per_mtok_in
         self.cost_per_mtok_out = cost_per_mtok_out
-        # Paid model tried automatically when the free primary is
-        # rate-limited (OpenRouter `models` fallback routing)
+        # Second model OpenRouter tries automatically when the primary fails
+        # (`models` fallback routing). On tier 1 that's the paid twin of a
+        # rate-limited free variant; on the frontier it's a different vendor
+        # entirely, so an OpenAI outage doesn't take escalation down with it.
         self.fallback_id = fallback_id
 
     def estimate_cost(self, tokens_in: int, tokens_out: int,
                       served_model: str | None = None) -> float:
         if served_model and served_model.endswith(":free"):
             return 0.0
-        return (tokens_in * self.cost_per_mtok_in
-                + tokens_out * self.cost_per_mtok_out) / 1_000_000
+        cost_in, cost_out = self.cost_per_mtok_in, self.cost_per_mtok_out
+        if served_model:
+            # A fallback answered: bill at its rate, not the primary's, or the
+            # cost metrics quietly lie every time routing kicks in.
+            base = served_model.split(":", 1)[0]
+            if base != self.openrouter_id and base in FRONTIER_PRICES:
+                _, cost_in, cost_out = FRONTIER_PRICES[base]
+        return (tokens_in * cost_in + tokens_out * cost_out) / 1_000_000
 
 
 # --- Tier 1: cheap bidders -------------------------------------------------
+# imported by: main.py, pipeline.py
 TIER1_MODELS: dict[str, ModelSpec] = {
     # Bidders/verifier run free-first with an automatic paid fallback when
     # the free pool is rate-limited. Pricing fields = the paid fallback.
@@ -84,13 +94,23 @@ TIER1_MODELS: dict[str, ModelSpec] = {
 
 # Topic toggle -> which tier-1 model drafts speculatively during bidding.
 # If the auction then picks that model, its draft is already in flight.
+# imported by: pipeline.py
 SPECULATIVE_HINT_MODELS: dict[str, str] = {
     "general": "gpt-oss",
     "coding": "qwen",
     "reasoning": "deepseek",
 }
 
+# Checked at import, not at request time: a typo here would otherwise surface
+# as a KeyError on a live query rather than a container that refuses to boot.
+_unknown_hints = set(SPECULATIVE_HINT_MODELS.values()) - set(TIER1_MODELS)
+if _unknown_hints:
+    raise ValueError(
+        f"SPECULATIVE_HINT_MODELS points at non-tier-1 models: {sorted(_unknown_hints)}"
+    )
+
 # --- Verifier ---------------------------------------------------------------
+# imported by: main.py, pipeline.py, evals/run_evals.py
 VERIFIER_MODEL = ModelSpec(
     key="verifier",
     # A different model from the generalist (gpt-oss-120b) so it never grades
@@ -259,33 +279,75 @@ class Settings(BaseSettings):
     # Frontier (tier-2) model, overridable via FRONTIER_MODEL_ID — evals
     # swap in a big-but-cheap open model to avoid frontier bills
     frontier_model_id: str = "openai/gpt-5.6-terra"
+    # Tried when the frontier primary fails (rate limit, credits, outage).
+    # Deliberately a different vendor: a same-vendor fallback shares the
+    # outage and the quota, so it buys nothing on the failures that matter.
+    # Empty string disables fallback routing — the escalate node then
+    # degrades to the tier-1 draft, as it did before.
+    frontier_fallback_model_id: str = "anthropic/claude-opus-5"
 
 
+# imported by: nearly everything - llm.py, main.py, prompts.py, security.py,
+# store.py, webgate.py, websearch.py, evals/run_evals.py, tests/test_websearch.py
 settings = Settings()
 
+# imported by: webgate.py
 WEB_GATE_MODEL = _web_gate_model()
 
 
 # --- Tier 2: frontier escalation target -------------------------------------
-# (display name, $/Mtok in, $/Mtok out) per known frontier choice; unknown
-# ids fall back to GPT-5 pricing so cost metrics stay conservative
-_FRONTIER_SPECS: dict[str, tuple[str, float, float]] = {
+# (display name, $/Mtok in, $/Mtok out) per known frontier choice. Read twice:
+# once to build TIER2_MODEL, and again by estimate_cost when a fallback served
+# the call — so it has to carry the fallback's price too, not just the
+# primary's. Unknown ids fall back to GPT-5 pricing so metrics stay
+# conservative.
+FRONTIER_PRICES: dict[str, tuple[str, float, float]] = {
     "openai/gpt-5.6-terra": ("GPT-5.6 Terra", 2.50, 15.00),
     "openai/gpt-5": ("GPT-5", 1.25, 10.00),
+    "anthropic/claude-opus-5": ("Claude Opus 5", 5.00, 25.00),
+    "anthropic/claude-opus-4-8": ("Claude Opus 4.8", 5.00, 25.00),
     "deepseek/deepseek-r1": ("DeepSeek R1", 0.50, 2.15),
     "meta-llama/llama-4-maverick": ("Llama 4 Maverick", 0.15, 0.60),
     "qwen/qwen3-235b-a22b": ("Qwen3 235B", 0.20, 0.60),
 }
-_name, _cin, _cout = _FRONTIER_SPECS.get(
-    settings.frontier_model_id, (settings.frontier_model_id, 1.25, 10.00))
+_UNKNOWN_FRONTIER_PRICE = (1.25, 10.00)
+
+_name, _cin, _cout = FRONTIER_PRICES.get(
+    settings.frontier_model_id,
+    (settings.frontier_model_id, *_UNKNOWN_FRONTIER_PRICE))
+# Never let the fallback equal the primary: OpenRouter rejects a duplicate
+# entry in `models`, and an eval that overrides FRONTIER_MODEL_ID to the
+# default fallback would otherwise send one.
+_fallback_id = settings.frontier_fallback_model_id.strip() or None
+if _fallback_id == settings.frontier_model_id:
+    _fallback_id = None
+# imported by: main.py, pipeline.py, evals/run_evals.py
 TIER2_MODEL = ModelSpec(
     key="frontier",
     openrouter_id=settings.frontier_model_id,
+    fallback_id=_fallback_id,
     display_name=_name,
     cost_per_mtok_in=_cin,
     cost_per_mtok_out=_cout,
 )
 
+
+# imported by: pipeline.py
+def frontier_display_name(served_model: str | None) -> str:
+    """Name of whichever frontier actually answered.
+
+    Without this the UI credits the primary for an answer the fallback
+    wrote — the one case where "answered by" would be flatly wrong.
+    """
+    if not served_model:
+        return TIER2_MODEL.display_name
+    base = served_model.split(":", 1)[0]
+    if base == TIER2_MODEL.openrouter_id:
+        return TIER2_MODEL.display_name
+    spec = FRONTIER_PRICES.get(base)
+    return spec[0] if spec else base
+
 # Baseline used for "cost saved" metrics: what the query would have cost if
 # every request went straight to the frontier model.
+# imported by: pipeline.py
 BASELINE_MODEL = TIER2_MODEL

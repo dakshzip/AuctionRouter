@@ -34,11 +34,13 @@ GATE_SYSTEM = (
 )
 
 
+# imported by: pipeline.py, as webgate.enabled()
 def enabled() -> bool:
     return bool(settings.web_gate_enabled and settings.openrouter_api_key)
 
 
-async def decide(query: str) -> tuple[bool | None, Usage | None]:
+# imported by: pipeline.py, as webgate.needs_web()
+async def needs_web(query: str) -> tuple[bool | None, Usage | None]:
     """Return (needs_web, usage). None means "no opinion" — never a guess.
 
     Callers must treat None as "fall back to the other signals" rather than
@@ -52,7 +54,7 @@ async def decide(query: str) -> tuple[bool | None, Usage | None]:
                  max_tokens=8, prefer_paid=True),
             timeout=settings.web_gate_timeout_s,
         )
-    except (LLMError, asyncio.TimeoutError, Exception) as e:
+    except (LLMError, asyncio.TimeoutError) as e:
         log.warning("web gate failed: %s: %s", type(e).__name__, str(e)[:150])
         return None, None
 

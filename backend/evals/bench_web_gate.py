@@ -91,7 +91,7 @@ def load_labelled() -> list[tuple[str, bool]]:
     return out
 
 
-async def probe(client: httpx.AsyncClient, model: str, query: str,
+async def measure_gate_call(client: httpx.AsyncClient, model: str, query: str,
                 key: str, max_tokens: int = 32,
                 effort: str = "low") -> tuple[float | None, bool | None]:
     """One streamed call. Returns (ttft_ms, answered_yes).
@@ -160,7 +160,7 @@ async def bench(model: str, data: list[tuple[str, bool]], key: str,
     async with httpx.AsyncClient() as client:
         for _ in range(repeat):
             for q, truth in data:
-                ttft, yes = await probe(client, model, q, key,
+                ttft, yes = await measure_gate_call(client, model, q, key,
                                         max_tokens, effort)
                 if ttft is None:
                     failed += 1

@@ -97,6 +97,7 @@ def _metrics_from_runs(runs: list[RunResult]) -> MetricsSummary:
 _store: Optional[BaseStore] = None
 
 
+# imported by: main.py, pipeline.py
 def get_store() -> BaseStore:
     global _store
     if _store is None:

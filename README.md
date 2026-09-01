@@ -206,6 +206,10 @@ by a number:
    - `DAILY_SPEND_LIMIT_USD` *(variable)* — e.g. `20`
    - `MONGODB_URI` / `MONGODB_DB` *(optional)* — Atlas M0; else in-memory
    - `FRONTIER_MODEL_ID` *(optional)*
+   - `FRONTIER_FALLBACK_MODEL_ID` *(optional)* — the frontier tried when the
+     primary is rate-limited, out of credits, or down.
+     Defaults to `anthropic/claude-opus-5`; set it empty to disable, in which
+     case a frontier failure degrades to the tier-1 draft as before.
 4. If using Atlas, allow `0.0.0.0/0` in its Network Access list.
 5. Confirm `<space-url>/health` returns `openrouter_key_set: true`.
 

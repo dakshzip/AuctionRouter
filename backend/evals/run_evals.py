@@ -54,7 +54,7 @@ Respond with ONLY a JSON object:
 {"score": <0.0-1.0>, "reason": "<one sentence>"}"""
 
 
-def _clamp(x) -> float:
+def _clamp01(x) -> float:
     try:
         return max(0.0, min(1.0, float(x)))
     except (TypeError, ValueError):
@@ -69,7 +69,7 @@ async def judge(item: dict, answer: str) -> tuple[float | None, str]:
         resp = await chat(VERIFIER_MODEL, JUDGE_SYSTEM, user,
                           reasoning_effort="low")
         data = extract_json(resp.content)
-        return _clamp(data.get("score")), str(data.get("reason", ""))[:200]
+        return _clamp01(data.get("score")), str(data.get("reason", ""))[:200]
     except Exception as e:  # judge failure shouldn't sink the run
         return None, f"judge error: {e}"[:200]
 
@@ -119,7 +119,7 @@ async def eval_item(sem: asyncio.Semaphore, mode: str, item: dict) -> dict:
 
 
 def summarize(results: list[dict], mode: str) -> str:
-    def agg(rows: list[dict]) -> dict:
+    def stats_for(rows: list[dict]) -> dict:
         scored = [r["judge_score"] for r in rows
                   if r.get("judge_score") is not None]
         return {
@@ -143,7 +143,7 @@ def summarize(results: list[dict], mode: str) -> str:
     for b in buckets + ["OVERALL"]:
         rows = results if b == "OVERALL" else [r for r in results
                                                if r["bucket"] == b]
-        a = agg(rows)
+        a = stats_for(rows)
         lines.append(f"{b:<14}{a['n']:>3}{str(a['judge']):>7}{a['tier1%']:>7}%"
                      f"{a['routed%']:>8}%{a['p50_ms']:>8}{a['cost$']:>9}")
     errors = [r for r in results if r.get("error")]

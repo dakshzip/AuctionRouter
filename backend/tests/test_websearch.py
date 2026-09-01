@@ -9,7 +9,7 @@ import pytest
 
 from app import websearch
 from app.config import settings
-from app.websearch import _parse, search_images, search_subject
+from app.websearch import _parse_images, search_images, search_subject
 
 PAYLOAD = {
     "images": [
@@ -26,7 +26,7 @@ PAYLOAD = {
 
 
 def test_parse_filters_and_dedupes():
-    out = _parse(PAYLOAD, limit=10)
+    out = _parse_images(PAYLOAD, limit=10)
     assert [i.url for i in out] == [
         "https://a.example/1.jpg",
         "https://a.example/2.jpg",
@@ -37,11 +37,11 @@ def test_parse_filters_and_dedupes():
 
 
 def test_parse_respects_limit():
-    assert len(_parse(PAYLOAD, limit=2)) == 2
+    assert len(_parse_images(PAYLOAD, limit=2)) == 2
 
 
 def test_parse_tolerates_missing_key():
-    assert _parse({}, limit=3) == []
+    assert _parse_images({}, limit=3) == []
 
 
 @pytest.mark.parametrize("query,expected", [

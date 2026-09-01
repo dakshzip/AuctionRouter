@@ -114,6 +114,7 @@ equation will not render.
 never put math inside a blockquote (no ">" before an equation)."""
 
 
+# imported by: pipeline.py
 BID_SYSTEM = """You are a bidding agent for a specific language model. Assess honestly how well YOUR model would handle the \
 query. Overbidding hurts you: your answer will be checked by an independent verifier, \
 and failures lower your historical accuracy in future auctions.
@@ -178,6 +179,7 @@ JSON object.
 """ + _FORMATTING
 
 
+# imported by: pipeline.py
 def bid_user(query: str, history: list[dict] | None = None,
              specialty: str = "") -> str:
     from .config import settings
@@ -190,6 +192,7 @@ def bid_user(query: str, history: list[dict] | None = None,
     return f"{profile}User query to bid on:\n\n{query}"
 
 
+# imported by: pipeline.py
 ANSWER_SYSTEM = """You are a helpful expert assistant. Answer the user's query \
 accurately and completely. Match length to the question: a word or a sentence \
 for simple factual queries, but give explanatory or open-ended questions real \
@@ -208,6 +211,7 @@ rather than guessing.
 
 # Escalated queries are the hard ones — the frontier model should show its
 # work rather than compress
+# imported by: pipeline.py, evals/run_evals.py
 FRONTIER_SYSTEM = """You are an expert assistant handling a question that \
 smaller models could not answer reliably — the hard cases. Give a thorough, \
 detailed, well-structured answer: walk through the reasoning step by step, \
@@ -242,6 +246,7 @@ Leave a blank line between distinct sections so the answer stays airy and \
 readable. If you are unsure about a fact, say so rather than guessing."""
 
 
+# imported by: pipeline.py
 VERIFY_SYSTEM = """You are a strict answer verifier. You will receive a user question \
 and a candidate answer produced by another model.
 
@@ -317,6 +322,7 @@ Respond with ONLY a JSON object:
  "feedback": "<two or three sentences: what the question demanded, what was missing or wrong>"}"""
 
 
+# imported by: pipeline.py
 def verify_user(query: str, answer: str, history: list[dict] | None = None,
                 web_used: bool = False) -> str:
     from .config import settings

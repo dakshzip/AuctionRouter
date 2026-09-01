@@ -4,7 +4,7 @@ import asyncio
 import json
 import re
 import time
-from typing import Any
+from typing import Any, AsyncIterator
 
 from urllib.parse import urlparse
 
@@ -13,16 +13,13 @@ import httpx
 from .config import ModelSpec, settings
 
 
+# imported by: pipeline.py, webgate.py
 class LLMError(Exception):
     pass
 
 
 def _citation_items(annotations: list | None) -> list[dict]:
-    """Pull {url, title} out of OpenRouter's url_citation annotations.
-
-    The title is what the hover preview shows, so it's carried alongside the
-    URL rather than thrown away with the rest of the annotation.
-    """
+    """Pull {url, title} out of OpenRouter's url_citation annotations."""
     out: list[dict] = []
     seen: set[str] = set()
     for a in annotations or []:
@@ -37,8 +34,39 @@ def _citation_items(annotations: list | None) -> list[dict]:
     return out
 
 
+# imported by: tests/test_citations.py
 def _citation_urls(annotations: list | None) -> list[str]:
     return [c["url"] for c in _citation_items(annotations)]
+
+
+def _new_citations(choice: dict, seen: list[dict]) -> list[dict]:
+    """Citations in this chunk that `seen` doesn't already have.
+
+    A streamed choice can carry annotations on the delta or on the final
+    message, and the same URL often arrives in both.
+    """
+    known = {c["url"] for c in seen}
+    out: list[dict] = []
+    for src in (choice.get("delta") or {}, choice.get("message") or {}):
+        for c in _citation_items(src.get("annotations")):
+            if c["url"] not in known:
+                known.add(c["url"])
+                out.append(c)
+    return out
+
+
+def _retry_delay(resp: httpx.Response) -> float:
+    """Seconds to wait before retrying a 429, capped.
+
+    The cap is the point: a provider asking for 60s would blow the request
+    timeout on a call a user is waiting on. Retry-After also has an HTTP-date
+    form, which float() can't read and which isn't worth parsing under a cap
+    this small.
+    """
+    try:
+        return min(float(resp.headers.get("Retry-After", 2.0)), 2.0)
+    except ValueError:
+        return 2.0
 
 
 # The web plugin writes citations as a bare domain in fullwidth brackets —
@@ -47,6 +75,7 @@ def _citation_urls(annotations: list | None) -> list[str]:
 _CITE_MARKER = re.compile(r"【\s*([^【】\s]+?)\s*】")
 
 
+# imported by: tests/test_citations.py
 def link_citations(text: str, citations: list) -> str:
     """Turn 【domain】 markers into real markdown links.
 
@@ -95,6 +124,52 @@ def link_citations(text: str, citations: list) -> str:
     return _CITE_MARKER.sub(repl, text)
 
 
+async def _iter_stream_payloads(resp: httpx.Response) -> AsyncIterator[dict]:
+    """Decoded SSE payloads, with keep-alives, [DONE] and junk chunks absorbed.
+
+    Split out so the consuming loop reads as "for each chunk of the answer"
+    rather than as line-protocol handling.
+    """
+    async for line in resp.aiter_lines():
+        if not line.startswith("data: "):
+            continue
+        payload = line[len("data: "):].strip()
+        if payload == "[DONE]":
+            return
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        yield data
+
+
+async def _open_stream(model: ModelSpec, body: dict,
+                       timeout: float) -> AsyncIterator[dict]:
+    """Connect, retry transient 429s, and yield decoded payloads.
+
+    Owns the connection so chat_stream doesn't have to: everything here is
+    retry and transport, nothing is about the answer being assembled.
+    """
+    attempts = 3
+    for attempt in range(attempts):
+        try:
+            async with get_client().stream(
+                "POST", "/chat/completions", json=body, timeout=timeout) as resp:
+                if resp.status_code == 429 and attempt < attempts - 1:
+                    await asyncio.sleep(_retry_delay(resp))
+                    continue
+                if resp.status_code != 200:
+                    text = (await resp.aread()).decode(errors="replace")
+                    raise LLMError(
+                        f"{model.openrouter_id}: HTTP {resp.status_code}: {text[:300]}")
+                async for data in _iter_stream_payloads(resp):
+                    yield data
+            return
+        except httpx.HTTPError as e:
+            raise LLMError(
+                f"{model.openrouter_id}: {type(e).__name__}: {e}") from e
+
+
 class LLMResponse:
     def __init__(self, content: str, tokens_in: int, tokens_out: int,
                  latency_ms: int, served_model: str = ""):
@@ -123,6 +198,7 @@ def get_client() -> httpx.AsyncClient:
     return _client
 
 
+# imported by: main.py, evals/run_evals.py
 async def close_client() -> None:
     global _client
     if _client is not None:
@@ -130,8 +206,7 @@ async def close_client() -> None:
         _client = None
 
 
-def _build_messages(system: str, user: str,
-                    history: list[dict] | None) -> list[dict]:
+def _build_messages(system: str, user: str,history: list[dict] | None) -> list[dict]:
     # Ground every model in the current date so it doesn't treat recent
     # events as "hasn't happened yet" (and flags needs_web correctly)
     from datetime import datetime, timezone
@@ -139,7 +214,7 @@ def _build_messages(system: str, user: str,
     return [
         {"role": "system", "content": f"Today's date is {today}.\n\n{system}"},
         *({"role": t["role"], "content": t["content"]} for t in (history or [])),
-        {"role": "user", "content": user},
+        {"role": "user", "content": user}
     ]
 
 
@@ -151,8 +226,7 @@ def _request_body(model: ModelSpec, system: str, user: str,
                   web: bool = False) -> dict:
     # Latency-critical calls (bids, drafts) skip the free pool: paid
     # endpoints respond in a fraction of the time
-    model_id = model.fallback_id if prefer_paid and model.fallback_id \
-        else model.openrouter_id
+    model_id = model.fallback_id if prefer_paid and model.fallback_id else model.openrouter_id
     body: dict = {
         "model": model_id,
         "messages": _build_messages(system, user, history),
@@ -175,6 +249,7 @@ def _request_body(model: ModelSpec, system: str, user: str,
     return body
 
 
+# imported by: pipeline.py, webgate.py, evals/run_evals.py
 async def chat(model: ModelSpec, system: str, user: str,
                timeout: float | None = None,
                max_tokens: int | None = None,
@@ -189,16 +264,23 @@ async def chat(model: ModelSpec, system: str, user: str,
     # Free-tier models often 429 transiently ("rate-limited upstream,
     # retry shortly"), so retry a couple of times honoring Retry-After.
     attempts = 3
-    for attempt in range(attempts):
-        resp = await get_client().post(
-            "/chat/completions",
-            json=body,
-            timeout=timeout or settings.request_timeout_s,
-        )
-        if resp.status_code != 429 or attempt == attempts - 1:
-            break
-        retry_after = min(float(resp.headers.get("Retry-After", 2)), 2.0)
-        await asyncio.sleep(retry_after)
+    resp: httpx.Response | None = None
+    try:
+        for attempt in range(attempts):
+            resp = await get_client().post(
+                "/chat/completions",
+                json=body,
+                timeout=timeout or settings.request_timeout_s,
+            )
+            if resp.status_code != 429 or attempt == attempts - 1:
+                break
+            await asyncio.sleep(_retry_delay(resp))
+    except httpx.HTTPError as e:
+        # Transport faults become LLMError so every caller can catch that one
+        # type and let anything else through as the bug it is.
+        raise LLMError(f"{model.openrouter_id}: {type(e).__name__}: {e}") from e
+    if resp is None:
+        raise LLMError(f"{model.openrouter_id}: no request was made")
 
     latency_ms = int((time.monotonic() - start) * 1000)
     if resp.status_code != 200:
@@ -222,6 +304,7 @@ async def chat(model: ModelSpec, system: str, user: str,
     )
 
 
+# imported by: pipeline.py (lazy import in run_query_stream)
 async def chat_stream(model: ModelSpec, system: str, user: str,
                       timeout: float | None = None,
                       max_tokens: int | None = None,
@@ -245,56 +328,31 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
     tokens_in = tokens_out = 0
     served = model.openrouter_id
 
-    attempts = 3
-    for attempt in range(attempts):
-        async with get_client().stream(
-            "POST", "/chat/completions", json=body,
-            timeout=timeout or settings.request_timeout_s,
-        ) as resp:
-            if resp.status_code == 429 and attempt < attempts - 1:
-                retry_after = min(float(resp.headers.get("Retry-After", 2)), 2.0)
-                await asyncio.sleep(retry_after)
-                continue
-            if resp.status_code != 200:
-                text = (await resp.aread()).decode(errors="replace")
-                raise LLMError(f"{model.openrouter_id}: HTTP {resp.status_code}: {text[:300]}")
-            async for line in resp.aiter_lines():
-                if not line.startswith("data: "):
-                    continue
-                payload = line[len("data: "):].strip()
-                if payload == "[DONE]":
-                    break
-                try:
-                    data = json.loads(payload)
-                except json.JSONDecodeError:
-                    continue
-                if "error" in data:
-                    raise LLMError(f"{model.openrouter_id}: {str(data['error'])[:300]}")
-                served = data.get("model", served)
-                usage = data.get("usage")
-                if usage:
-                    tokens_in = usage.get("prompt_tokens", tokens_in)
-                    tokens_out = usage.get("completion_tokens", tokens_out)
-                choices = data.get("choices") or []
-                if choices:
-                    delta = choices[0].get("delta") or {}
-                    # Citations arrive alongside the deltas (or on the final
-                    # message); collected here so the completed answer can be
-                    # rewritten with real links below.
-                    for src in (delta, choices[0].get("message") or {}):
-                        for c in _citation_items(src.get("annotations")):
-                            if all(c["url"] != e["url"] for e in citations):
-                                citations.append(c)
-                    thinking = delta.get("reasoning") or ""
-                    if thinking:
-                        # Reasoning summaries stream before content on
-                        # reasoning models; provider support varies
-                        yield {"type": "reasoning_delta", "text": thinking}
-                    piece = delta.get("content") or ""
-                    if piece:
-                        parts.append(piece)
-                        yield {"type": "delta", "text": piece}
-        break
+    async for data in _open_stream(model, body,
+                                   timeout or settings.request_timeout_s):
+        if "error" in data:
+            raise LLMError(f"{model.openrouter_id}: {str(data['error'])[:300]}")
+        served = data.get("model", served)
+        usage = data.get("usage")
+        if usage:
+            tokens_in = usage.get("prompt_tokens", tokens_in)
+            tokens_out = usage.get("completion_tokens", tokens_out)
+        choices = data.get("choices") or []
+        if not choices:
+            continue
+        # Collected as they stream so the finished answer can be rewritten
+        # with real links below.
+        citations += _new_citations(choices[0], citations)
+        delta = choices[0].get("delta") or {}
+        thinking = delta.get("reasoning") or ""
+        if thinking:
+            # Reasoning summaries stream before content on reasoning
+            # models; provider support varies
+            yield {"type": "reasoning_delta", "text": thinking}
+        piece = delta.get("content") or ""
+        if piece:
+            parts.append(piece)
+            yield {"type": "delta", "text": piece}
 
     yield {
         "type": "final",
@@ -310,6 +368,7 @@ async def chat_stream(model: ModelSpec, system: str, user: str,
     }
 
 
+# imported by: pipeline.py, evals/run_evals.py
 def extract_json(text: str) -> dict[str, Any]:
     """Pull the first JSON object out of a model response.
 
